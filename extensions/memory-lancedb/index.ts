@@ -143,10 +143,14 @@ class MemoryDB {
 }
 
 // ============================================================================
-// OpenAI Embeddings
+// Embedding Providers
 // ============================================================================
 
-class Embeddings {
+interface EmbeddingProvider {
+  embed(text: string): Promise<number[]>;
+}
+
+class OpenAIEmbeddings implements EmbeddingProvider {
   private client: OpenAI;
 
   constructor(
@@ -163,6 +167,47 @@ class Embeddings {
     });
     return response.data[0].embedding;
   }
+}
+
+// Lazy-loaded Xenova transformers pipeline
+let pipelinePromise: Promise<unknown> | null = null;
+
+class LocalEmbeddings implements EmbeddingProvider {
+  constructor(private model: string) {}
+
+  private async getPipeline() {
+    if (!pipelinePromise) {
+      pipelinePromise = (async () => {
+        // Dynamic import to avoid loading transformers until needed
+        const { pipeline } = await import("@xenova/transformers");
+        return pipeline("feature-extraction", this.model);
+      })();
+    }
+    return pipelinePromise;
+  }
+
+  async embed(text: string): Promise<number[]> {
+    const extractor = (await this.getPipeline()) as (
+      text: string,
+      options: { pooling: string; normalize: boolean },
+    ) => Promise<{ data: Float32Array }>;
+
+    const output = await extractor(text, {
+      pooling: "mean",
+      normalize: true,
+    });
+
+    return Array.from(output.data);
+  }
+}
+
+function createEmbeddingProvider(
+  cfg: import("./config.js").MemoryConfig["embedding"],
+): EmbeddingProvider {
+  if (cfg.provider === "local") {
+    return new LocalEmbeddings(cfg.model ?? "Xenova/all-MiniLM-L6-v2");
+  }
+  return new OpenAIEmbeddings(cfg.apiKey, cfg.model ?? "text-embedding-3-small");
 }
 
 // ============================================================================
@@ -236,9 +281,11 @@ const memoryPlugin = {
   register(api: OpenClawPluginApi) {
     const cfg = memoryConfigSchema.parse(api.pluginConfig);
     const resolvedDbPath = api.resolvePath(cfg.dbPath!);
-    const vectorDim = vectorDimsForModel(cfg.embedding.model ?? "text-embedding-3-small");
+    const defaultModel =
+      cfg.embedding.provider === "local" ? "Xenova/all-MiniLM-L6-v2" : "text-embedding-3-small";
+    const vectorDim = vectorDimsForModel(cfg.embedding.model ?? defaultModel);
     const db = new MemoryDB(resolvedDbPath, vectorDim);
-    const embeddings = new Embeddings(cfg.embedding.apiKey, cfg.embedding.model!);
+    const embeddings = createEmbeddingProvider(cfg.embedding);
 
     api.logger.info(`memory-lancedb: plugin registered (db: ${resolvedDbPath}, lazy init)`);
 
@@ -594,8 +641,9 @@ const memoryPlugin = {
     api.registerService({
       id: "memory-lancedb",
       start: () => {
+        const model = cfg.embedding.model ?? defaultModel;
         api.logger.info(
-          `memory-lancedb: initialized (db: ${resolvedDbPath}, model: ${cfg.embedding.model})`,
+          `memory-lancedb: initialized (db: ${resolvedDbPath}, provider: ${cfg.embedding.provider}, model: ${model})`,
         );
       },
       stop: () => {

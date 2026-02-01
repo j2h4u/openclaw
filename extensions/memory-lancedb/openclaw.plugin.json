@@ -2,16 +2,20 @@
   "id": "memory-lancedb",
   "kind": "memory",
   "uiHints": {
+    "embedding.provider": {
+      "label": "Embedding Provider",
+      "help": "Use 'local' for Xenova (no API key needed) or 'openai' for OpenAI"
+    },
     "embedding.apiKey": {
       "label": "OpenAI API Key",
       "sensitive": true,
       "placeholder": "sk-proj-...",
-      "help": "API key for OpenAI embeddings (or use ${OPENAI_API_KEY})"
+      "help": "API key for OpenAI embeddings (required only for OpenAI provider)"
     },
     "embedding.model": {
       "label": "Embedding Model",
-      "placeholder": "text-embedding-3-small",
-      "help": "OpenAI embedding model to use"
+      "placeholder": "Xenova/all-MiniLM-L6-v2",
+      "help": "Model to use: Xenova/all-MiniLM-L6-v2 (local) or text-embedding-3-small (OpenAI)"
     },
     "dbPath": {
       "label": "Database Path",
@@ -35,15 +39,18 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "provider": {
+            "type": "string",
+            "enum": ["openai", "local"],
+            "default": "openai"
+          },
           "apiKey": {
             "type": "string"
           },
           "model": {
-            "type": "string",
-            "enum": ["text-embedding-3-small", "text-embedding-3-large"]
+            "type": "string"
           }
-        },
-        "required": ["apiKey"]
+        }
       },
       "dbPath": {
         "type": "string"
