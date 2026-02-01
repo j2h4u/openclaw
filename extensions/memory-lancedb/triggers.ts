@@ -52,6 +52,9 @@ const REMEMBER_TRIGGERS: TriggerPattern[] = [
   { pattern: /\bзапомни\b/i, category: "remember", lang: "ru", weight: 2 },
   { pattern: /\bне забудь\b/i, category: "remember", lang: "ru", weight: 2 },
   { pattern: /\bпомни\b/i, category: "remember", lang: "ru", weight: 2 },
+  { pattern: /\bучти\b/i, category: "remember", lang: "ru", weight: 2 },
+  { pattern: /\bзаруби на носу\b/i, category: "remember", lang: "ru", weight: 2 },
+  { pattern: /\bвыучи\b/i, category: "remember", lang: "ru" },
   { pattern: /\bзапиши\b/i, category: "remember", lang: "ru" },
   { pattern: /\bна будущее\b/i, category: "remember", lang: "ru" },
   { pattern: /\bимей в виду\b/i, category: "remember", lang: "ru" },
@@ -119,7 +122,9 @@ const PREFERENCE_TRIGGERS: TriggerPattern[] = [
   { pattern: /\b(мне )?(нравится|люблю|предпочитаю|обожаю)\b/i, category: "preference", lang: "ru" },
   { pattern: /\b(мне )?не (нравится|люблю)\b/i, category: "preference", lang: "ru" },
   { pattern: /\bненавижу\b/i, category: "preference", lang: "ru" },
-  { pattern: /\bмой любимый\b/i, category: "preference", lang: "ru" },
+  { pattern: /\bя хочу\b/i, category: "preference", lang: "ru" },
+  { pattern: /\bя не хочу\b/i, category: "preference", lang: "ru" },
+  { pattern: /\bмо[йяеё] любим[ыйаяое]+\b/i, category: "preference", lang: "ru" },
   { pattern: /\bя фанат\b/i, category: "preference", lang: "ru" },
 
   // Ukrainian
@@ -250,6 +255,7 @@ const IDENTITY_TRIGGERS: TriggerPattern[] = [
   // Russian
   { pattern: /\bменя зовут\b/i, category: "identity", lang: "ru", weight: 2 },
   { pattern: /\bмоё? имя\b/i, category: "identity", lang: "ru", weight: 2 },
+  { pattern: /\bмне .* (год|года|лет)\b/i, category: "identity", lang: "ru", weight: 2 },
   { pattern: /\bзови меня\b/i, category: "identity", lang: "ru" },
   { pattern: /\bмой (телефон|email|адрес|день рождения)\b/i, category: "identity", lang: "ru" },
 
@@ -314,6 +320,10 @@ const FACT_TRIGGERS: TriggerPattern[] = [
   { pattern: /\bя (работаю|живу|учусь)\b/i, category: "fact", lang: "ru" },
   { pattern: /\bу меня (есть|имеется)\b/i, category: "fact", lang: "ru" },
   { pattern: /\bя по профессии\b/i, category: "fact", lang: "ru" },
+  { pattern: /\bя из\b/i, category: "fact", lang: "ru" },
+  { pattern: /\bя (была?|жила?|бывала?|ездила?|родил(?:ся|ась)|учил(?:ся|ась)) в\b/i, category: "fact", lang: "ru" },
+  { pattern: /\bя посещала?\b/i, category: "fact", lang: "ru" },
+  { pattern: /\bя закончила?\b/i, category: "fact", lang: "ru" },
 
   // Ukrainian
   { pattern: /\bя (працюю|живу|навчаюсь)\b/i, category: "fact", lang: "uk" },
