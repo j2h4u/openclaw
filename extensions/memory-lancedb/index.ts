@@ -215,30 +215,6 @@ function createEmbeddingProvider(
 // Rule-based capture filter (patterns in triggers.ts)
 // ============================================================================
 
-function shouldCapture(text: string): boolean {
-  if (text.length < 10 || text.length > 500) {
-    return false;
-  }
-  // Skip injected context from memory recall
-  if (text.includes("<relevant-memories>")) {
-    return false;
-  }
-  // Skip system-generated content
-  if (text.startsWith("<") && text.includes("</")) {
-    return false;
-  }
-  // Skip agent summary responses (contain markdown formatting)
-  if (text.includes("**") && text.includes("\n-")) {
-    return false;
-  }
-  // Skip emoji-heavy responses (likely agent output)
-  const emojiCount = (text.match(/[\u{1F300}-\u{1F9FF}]/gu) || []).length;
-  if (emojiCount > 3) {
-    return false;
-  }
-  return matchTrigger(text) !== null;
-}
-
 const TRIGGER_TO_CATEGORY: Record<TriggerCategory, MemoryCategory> = {
   remember: "other",
   preference: "preference",
@@ -248,12 +224,60 @@ const TRIGGER_TO_CATEGORY: Record<TriggerCategory, MemoryCategory> = {
   importance: "other",
 };
 
-function detectCategory(text: string): MemoryCategory {
-  const match = matchTrigger(text);
-  if (match) {
-    return TRIGGER_TO_CATEGORY[match.category];
-  }
-  return "other";
+// Factory functions that accept language filter (called from register())
+function createShouldCapture(language: MemoryConfig["language"], debug: (msg: string) => void) {
+  return function shouldCapture(text: string): boolean {
+    const preview = text.length > 60 ? text.slice(0, 60) + "..." : text;
+
+    if (text.length < 10) {
+      debug(`[capture] SKIP (too short: ${text.length} chars): "${preview}"`);
+      return false;
+    }
+    if (text.length > 500) {
+      debug(`[capture] SKIP (too long: ${text.length} chars): "${preview}"`);
+      return false;
+    }
+    // Skip injected context from memory recall
+    if (text.includes("<relevant-memories>")) {
+      debug(`[capture] SKIP (contains memories tag): "${preview}"`);
+      return false;
+    }
+    // Skip system-generated content
+    if (text.startsWith("<") && text.includes("</")) {
+      debug(`[capture] SKIP (system content): "${preview}"`);
+      return false;
+    }
+    // Skip agent summary responses (contain markdown formatting)
+    if (text.includes("**") && text.includes("\n-")) {
+      debug(`[capture] SKIP (markdown response): "${preview}"`);
+      return false;
+    }
+    // Skip emoji-heavy responses (likely agent output)
+    const emojiCount = (text.match(/[\u{1F300}-\u{1F9FF}]/gu) || []).length;
+    if (emojiCount > 3) {
+      debug(`[capture] SKIP (emoji-heavy: ${emojiCount}): "${preview}"`);
+      return false;
+    }
+
+    const match = matchTrigger(text, language);
+    if (match) {
+      debug(`[capture] MATCH trigger "${match.category}" (lang: ${match.lang}, weight: ${match.weight}): "${preview}"`);
+      return true;
+    }
+
+    debug(`[capture] SKIP (no trigger matched, lang filter: ${JSON.stringify(language)}): "${preview}"`);
+    return false;
+  };
+}
+
+function createDetectCategory(language: MemoryConfig["language"]) {
+  return function detectCategory(text: string): MemoryCategory {
+    const match = matchTrigger(text, language);
+    if (match) {
+      return TRIGGER_TO_CATEGORY[match.category];
+    }
+    return "other";
+  };
 }
 
 // ============================================================================
@@ -273,6 +297,13 @@ const memoryPlugin = {
     const defaultModel =
       cfg.embedding.provider === "local" ? "Xenova/all-MiniLM-L6-v2" : "text-embedding-3-small";
     const vectorDim = vectorDimsForModel(cfg.embedding.model ?? defaultModel);
+
+    // Debug logger for capture analysis (visible in gateway logs)
+    const debug = (msg: string) => api.logger.debug?.(`memory-lancedb: ${msg}`);
+
+    // Create capture functions with language filter from config
+    const shouldCapture = createShouldCapture(cfg.language, debug);
+    const detectCategory = createDetectCategory(cfg.language);
     const db = new MemoryDB(resolvedDbPath, vectorDim);
     const embeddings = createEmbeddingProvider(cfg.embedding);
 
