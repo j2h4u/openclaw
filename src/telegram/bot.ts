@@ -45,6 +45,7 @@ import {
 } from "./bot-updates.js";
 import { withTelegramApiErrorLogging } from "./api-logging.js";
 import { resolveTelegramFetch } from "./fetch.js";
+import { rawUpdateBuffer } from "./raw-update-buffer.js";
 import { wasSentByBot } from "./sent-message-cache.js";
 
 export type TelegramBotOptions = {
@@ -213,6 +214,9 @@ export function createTelegramBot(opts: TelegramBotOptions) {
   };
 
   bot.use(async (ctx, next) => {
+    // Capture raw update for diagnostics (decoupled - remove this line to disable)
+    rawUpdateBuffer.push(ctx.update);
+
     if (shouldLogVerbose()) {
       try {
         const raw = stringifyUpdate(ctx.update);

@@ -43,6 +43,7 @@ import { recordInboundSession } from "../../channels/session.js";
 import { discordMessageActions } from "../../channels/plugins/actions/discord.js";
 import { signalMessageActions } from "../../channels/plugins/actions/signal.js";
 import { telegramMessageActions } from "../../channels/plugins/actions/telegram.js";
+import { createTelegramRawUpdateTool } from "../../telegram/tools/telegram-raw-update.js";
 import { createWhatsAppLoginTool } from "../../channels/plugins/agent-tools/whatsapp-login.js";
 import { monitorWebChannel } from "../../channels/web/index.js";
 import {
@@ -292,6 +293,8 @@ export function createPluginRuntime(): PluginRuntime {
         sendMessageTelegram,
         monitorTelegramProvider,
         messageActions: telegramMessageActions,
+        // Decoupled diagnostic tool - remove this line to disable
+        createRawUpdateTool: createTelegramRawUpdateTool,
       },
       signal: {
         probeSignal,
