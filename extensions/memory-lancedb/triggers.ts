@@ -13,7 +13,7 @@
  * - Italian (it)
  * - Portuguese (pt)
  * - German (de)
- * - Universal (phone numbers, emails)
+ * - Common patterns (phone numbers, emails)
  *
  * Categories:
  * - remember: explicit memory commands (weight: 2)
@@ -26,7 +26,7 @@
 
 export type TriggerCategory = "remember" | "preference" | "decision" | "identity" | "fact" | "importance";
 
-export type LanguageCode = "en" | "uk" | "ru" | "by" | "kk" | "cz" | "fr" | "es" | "it" | "pt" | "de" | "universal";
+export type LanguageCode = "en" | "uk" | "ru" | "by" | "kk" | "cz" | "fr" | "es" | "it" | "pt" | "de" | "common";
 
 export const SUPPORTED_LANGUAGES: LanguageCode[] = ["en", "uk", "ru", "by", "kk", "cz", "fr", "es", "it", "pt", "de"];
 
@@ -235,9 +235,9 @@ const DECISION_TRIGGERS: TriggerPattern[] = [
 // Identity / Personal info
 // ============================================================================
 const IDENTITY_TRIGGERS: TriggerPattern[] = [
-  // Universal patterns
-  { pattern: /\+\d{10,}/, category: "identity", lang: "universal", weight: 2 },
-  { pattern: /[\w.-]+@[\w.-]+\.\w{2,}/, category: "identity", lang: "universal", weight: 2 },
+  // Common patterns (phone, email)
+  { pattern: /\+\d{10,}/, category: "identity", lang: "common", weight: 2 },
+  { pattern: /[\w.-]+@[\w.-]+\.\w{2,}/, category: "identity", lang: "common", weight: 2 },
 
   // English
   { pattern: /\bmy name is\b/i, category: "identity", lang: "en", weight: 2 },
@@ -451,8 +451,8 @@ function getFilteredTriggers(languages: LanguageFilter): TriggerPattern[] {
   const langSet = new Set<LanguageCode>(
     Array.isArray(languages) ? languages : [languages]
   );
-  // Always include universal patterns
-  langSet.add("universal");
+  // Always include common patterns
+  langSet.add("common");
 
   return ALL_TRIGGERS.filter((t) => langSet.has(t.lang));
 }
