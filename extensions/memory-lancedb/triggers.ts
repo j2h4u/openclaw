@@ -1,5 +1,5 @@
 /**
- * Memory capture triggers - multilingual patterns for auto-capture
+ * Memory capture triggers - commonlingual patterns for auto-capture
  *
  * Supported languages (12):
  * - English (en)
@@ -26,7 +26,7 @@
 
 export type TriggerCategory = "remember" | "preference" | "decision" | "identity" | "fact" | "importance";
 
-export type LanguageCode = "en" | "uk" | "ru" | "by" | "kk" | "cz" | "fr" | "es" | "it" | "pt" | "de" | "multi";
+export type LanguageCode = "en" | "uk" | "ru" | "by" | "kk" | "cz" | "fr" | "es" | "it" | "pt" | "de" | "common";
 
 export const SUPPORTED_LANGUAGES: LanguageCode[] = ["en", "uk", "ru", "by", "kk", "cz", "fr", "es", "it", "pt", "de"];
 
@@ -235,13 +235,11 @@ const DECISION_TRIGGERS: TriggerPattern[] = [
 // Identity / Personal info
 // ============================================================================
 const IDENTITY_TRIGGERS: TriggerPattern[] = [
-  // Multi-language patterns (phone, email)
-  // CIS phone: +7/8 with various formats (Russia, Kazakhstan)
-  { pattern: /(?:\+?7|8)[\s\-\(]?(?:\d{3}[\s\-\)]?)?[\d\s\-\(\)]{7,14}/, category: "identity", lang: "multi", weight: 2 },
-  // International phone: +XXX... (10+ digits)
-  { pattern: /\+\d{10,}/, category: "identity", lang: "multi", weight: 2 },
+  // Common patterns (phone, email) - language-agnostic
+  // Universal phone: any country code (1-4 digits), various formats
+  { pattern: /(?:\+?\d{1,4})[\s\-\(]?(?:\d{3}[\s\-\)]?)?[\d\s\-\(\)]{7,14}/, category: "identity", lang: "common", weight: 2 },
   // Email
-  { pattern: /[\w.-]+@[\w.-]+\.\w{2,}/, category: "identity", lang: "multi", weight: 2 },
+  { pattern: /[\w.-]+@[\w.-]+\.\w{2,}/, category: "identity", lang: "common", weight: 2 },
 
   // English
   { pattern: /\bmy name is\b/i, category: "identity", lang: "en", weight: 2 },
@@ -455,8 +453,8 @@ function getFilteredTriggers(languages: LanguageFilter): TriggerPattern[] {
   const langSet = new Set<LanguageCode>(
     Array.isArray(languages) ? languages : [languages]
   );
-  // Always include multi patterns
-  langSet.add("multi");
+  // Always include common patterns
+  langSet.add("common");
 
   return ALL_TRIGGERS.filter((t) => langSet.has(t.lang));
 }

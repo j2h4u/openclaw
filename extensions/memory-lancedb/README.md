@@ -74,7 +74,7 @@ The plugin includes trigger patterns for 12 languages:
 | `it` | Italian |
 | `pt` | Portuguese |
 | `de` | German |
-| `multi` | Multi-language patterns (phone numbers, emails) |
+| `common` | Common patterns (phone numbers, emails) |
 
 ### Language Filter Examples
 
@@ -89,7 +89,7 @@ The plugin includes trigger patterns for 12 languages:
 "language": ["en", "ru", "uk"]
 ```
 
-Note: `multi` patterns (phone numbers, emails) are always included regardless of filter.
+Note: `common` patterns (phone numbers, emails) are always included regardless of filter.
 
 ## Trigger Categories
 
