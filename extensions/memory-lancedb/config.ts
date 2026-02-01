@@ -2,6 +2,8 @@ import fs from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+export type LanguageCode = "en" | "uk" | "ru" | "by" | "kk" | "cz" | "fr" | "es" | "it" | "pt" | "de";
+
 export type MemoryConfig = {
   embedding:
     | {
@@ -16,6 +18,8 @@ export type MemoryConfig = {
   dbPath?: string;
   autoCapture?: boolean;
   autoRecall?: boolean;
+  /** Language(s) for trigger detection: "auto" (all), single code, or array */
+  language?: "auto" | LanguageCode | LanguageCode[];
 };
 
 export const MEMORY_CATEGORIES = ["preference", "fact", "decision", "entity", "other"] as const;
@@ -95,13 +99,31 @@ function resolveEmbeddingModel(embedding: Record<string, unknown>, provider: "op
   return model;
 }
 
+const VALID_LANGUAGES: readonly string[] = ["en", "uk", "ru", "by", "kk", "cz", "fr", "es", "it", "pt", "de"];
+
+function parseLanguage(value: unknown): "auto" | LanguageCode | LanguageCode[] {
+  if (value === undefined || value === "auto") {
+    return "auto";
+  }
+  if (typeof value === "string" && VALID_LANGUAGES.includes(value)) {
+    return value as LanguageCode;
+  }
+  if (Array.isArray(value)) {
+    const valid = value.filter((v) => typeof v === "string" && VALID_LANGUAGES.includes(v));
+    if (valid.length > 0) {
+      return valid as LanguageCode[];
+    }
+  }
+  return "auto";
+}
+
 export const memoryConfigSchema = {
   parse(value: unknown): MemoryConfig {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       throw new Error("memory config required");
     }
     const cfg = value as Record<string, unknown>;
-    assertAllowedKeys(cfg, ["embedding", "dbPath", "autoCapture", "autoRecall"], "memory config");
+    assertAllowedKeys(cfg, ["embedding", "dbPath", "autoCapture", "autoRecall", "language"], "memory config");
 
     const embedding = cfg.embedding as Record<string, unknown> | undefined;
     if (!embedding) {
@@ -122,6 +144,7 @@ export const memoryConfigSchema = {
         dbPath: typeof cfg.dbPath === "string" ? cfg.dbPath : DEFAULT_DB_PATH,
         autoCapture: cfg.autoCapture !== false,
         autoRecall: cfg.autoRecall !== false,
+        language: parseLanguage(cfg.language),
       };
     }
 
@@ -141,6 +164,7 @@ export const memoryConfigSchema = {
       dbPath: typeof cfg.dbPath === "string" ? cfg.dbPath : DEFAULT_DB_PATH,
       autoCapture: cfg.autoCapture !== false,
       autoRecall: cfg.autoRecall !== false,
+      language: parseLanguage(cfg.language),
     };
   },
   uiHints: {
@@ -171,6 +195,11 @@ export const memoryConfigSchema = {
     autoRecall: {
       label: "Auto-Recall",
       help: "Automatically inject relevant memories into context",
+    },
+    language: {
+      label: "Trigger Language(s)",
+      placeholder: "auto",
+      help: "Language(s) for trigger detection: \"auto\" (all), single code (en, uk, ru, by, kk, cz, fr, es, it, pt, de), or array",
     },
   },
 };
