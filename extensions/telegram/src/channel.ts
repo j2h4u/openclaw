@@ -38,6 +38,12 @@ const telegramMessageActions: ChannelMessageActionAdapter = {
     await getTelegramRuntime().channel.telegram.messageActions.handleAction(ctx),
 };
 
+// Decoupled diagnostic tool - remove this function to disable
+const telegramAgentTools = () => {
+  const createTool = getTelegramRuntime().channel.telegram.createRawUpdateTool;
+  return createTool ? [createTool()] : [];
+};
+
 function parseReplyToMessageId(replyToId?: string | null) {
   if (!replyToId) {
     return undefined;
@@ -186,6 +192,8 @@ export const telegramPlugin: ChannelPlugin<ResolvedTelegramAccount> = {
     listGroups: async (params) => listTelegramDirectoryGroupsFromConfig(params),
   },
   actions: telegramMessageActions,
+  // Decoupled diagnostic tool - remove this line to disable
+  agentTools: telegramAgentTools,
   setup: {
     resolveAccountId: ({ accountId }) => normalizeAccountId(accountId),
     applyAccountName: ({ cfg, accountId, name }) =>
