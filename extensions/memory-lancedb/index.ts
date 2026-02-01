@@ -18,6 +18,7 @@ import {
   memoryConfigSchema,
   vectorDimsForModel,
 } from "./config.js";
+import { matchTrigger, type TriggerCategory } from "./triggers.js";
 
 // ============================================================================
 // Types
@@ -211,20 +212,8 @@ function createEmbeddingProvider(
 }
 
 // ============================================================================
-// Rule-based capture filter
+// Rule-based capture filter (patterns in triggers.ts)
 // ============================================================================
-
-const MEMORY_TRIGGERS = [
-  /zapamatuj si|pamatuj|remember/i,
-  /preferuji|radši|nechci|prefer/i,
-  /rozhodli jsme|budeme používat/i,
-  /\+\d{10,}/,
-  /[\w.-]+@[\w.-]+\.\w+/,
-  /můj\s+\w+\s+je|je\s+můj/i,
-  /my\s+\w+\s+is|is\s+my/i,
-  /i (like|prefer|hate|love|want|need)/i,
-  /always|never|important/i,
-];
 
 function shouldCapture(text: string): boolean {
   if (text.length < 10 || text.length > 500) {
@@ -247,22 +236,22 @@ function shouldCapture(text: string): boolean {
   if (emojiCount > 3) {
     return false;
   }
-  return MEMORY_TRIGGERS.some((r) => r.test(text));
+  return matchTrigger(text) !== null;
 }
 
+const TRIGGER_TO_CATEGORY: Record<TriggerCategory, MemoryCategory> = {
+  remember: "other",
+  preference: "preference",
+  decision: "decision",
+  identity: "entity",
+  fact: "fact",
+  importance: "other",
+};
+
 function detectCategory(text: string): MemoryCategory {
-  const lower = text.toLowerCase();
-  if (/prefer|radši|like|love|hate|want/i.test(lower)) {
-    return "preference";
-  }
-  if (/rozhodli|decided|will use|budeme/i.test(lower)) {
-    return "decision";
-  }
-  if (/\+\d{10,}|@[\w.-]+\.\w+|is called|jmenuje se/i.test(lower)) {
-    return "entity";
-  }
-  if (/is|are|has|have|je|má|jsou/i.test(lower)) {
-    return "fact";
+  const match = matchTrigger(text);
+  if (match) {
+    return TRIGGER_TO_CATEGORY[match.category];
   }
   return "other";
 }
