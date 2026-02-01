@@ -29,6 +29,12 @@ RUN OPENCLAW_A2UI_SKIP_MISSING=1 pnpm build
 ENV OPENCLAW_PREFER_PNPM=1
 RUN pnpm ui:build
 
+# Install LanceDB plugin dependencies (per docs: install in extension directory)
+# Remove devDeps (workspace: protocol incompatible with standalone npm install)
+RUN cd extensions/memory-lancedb && \
+    node -e "const p=require('./package.json'); delete p.devDependencies; require('fs').writeFileSync('./package.json', JSON.stringify(p, null, 2))" && \
+    npm install
+
 ENV NODE_ENV=production
 
 # Allow non-root user to write temp files during runtime/tests.
