@@ -31,9 +31,11 @@ RUN pnpm ui:build
 
 # Install LanceDB plugin dependencies (per docs: install in extension directory)
 # Remove devDeps (workspace: protocol incompatible with standalone npm install)
+# Fix permissions for Xenova cache (runs as node user)
 RUN cd extensions/memory-lancedb && \
     node -e "const p=require('./package.json'); delete p.devDependencies; require('fs').writeFileSync('./package.json', JSON.stringify(p, null, 2))" && \
-    npm install
+    npm install && \
+    chown -R node:node node_modules
 
 ENV NODE_ENV=production
 
