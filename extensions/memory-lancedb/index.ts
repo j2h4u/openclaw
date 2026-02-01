@@ -578,6 +578,12 @@ const memoryPlugin = {
         }
 
         try {
+          // Debug: log message count and roles
+          const roles = (event.messages as Array<Record<string, unknown>>)
+            .map((m) => m?.role ?? "unknown")
+            .join(", ");
+          debug(`[agent_end] Processing ${event.messages.length} messages, roles: [${roles}]`);
+
           // Extract text content from messages (handling unknown[] type)
           const texts: string[] = [];
           for (const msg of event.messages) {
