@@ -236,7 +236,11 @@ const DECISION_TRIGGERS: TriggerPattern[] = [
 // ============================================================================
 const IDENTITY_TRIGGERS: TriggerPattern[] = [
   // Multi-language patterns (phone, email)
+  // CIS phone: +7/8 with various formats (Russia, Kazakhstan)
+  { pattern: /(?:\+?7|8)[\s\-\(]?(?:\d{3}[\s\-\)]?)?[\d\s\-\(\)]{7,14}/, category: "identity", lang: "multi", weight: 2 },
+  // International phone: +XXX... (10+ digits)
   { pattern: /\+\d{10,}/, category: "identity", lang: "multi", weight: 2 },
+  // Email
   { pattern: /[\w.-]+@[\w.-]+\.\w{2,}/, category: "identity", lang: "multi", weight: 2 },
 
   // English

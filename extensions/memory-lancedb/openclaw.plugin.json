@@ -29,6 +29,11 @@
     "autoRecall": {
       "label": "Auto-Recall",
       "help": "Automatically inject relevant memories into context"
+    },
+    "language": {
+      "label": "Trigger Language(s)",
+      "placeholder": "auto",
+      "help": "Language filter: 'auto' (all), code (en/ru/uk/...), or array ['en','ru']"
     }
   },
   "configSchema": {
@@ -60,6 +65,12 @@
       },
       "autoRecall": {
         "type": "boolean"
+      },
+      "language": {
+        "oneOf": [
+          { "type": "string" },
+          { "type": "array", "items": { "type": "string" } }
+        ]
       }
     },
     "required": ["embedding"]
