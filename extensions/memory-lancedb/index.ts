@@ -15,6 +15,7 @@ import { stringEnum } from "openclaw/plugin-sdk";
 import {
   MEMORY_CATEGORIES,
   type MemoryCategory,
+  type MemoryConfig,
   memoryConfigSchema,
   vectorDimsForModel,
 } from "./config.js";
