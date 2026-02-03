@@ -49,30 +49,30 @@ const REMEMBER_TRIGGERS: TriggerPattern[] = [
   { pattern: /\bfor (the )?future\b/i, category: "remember", lang: "en" },
 
   // Russian
-  { pattern: /\bзапомни\b/i, category: "remember", lang: "ru", weight: 2 },
-  { pattern: /\bне забудь\b/i, category: "remember", lang: "ru", weight: 2 },
-  { pattern: /\bпомни\b/i, category: "remember", lang: "ru", weight: 2 },
-  { pattern: /\bучти\b/i, category: "remember", lang: "ru", weight: 2 },
-  { pattern: /\bзаруби на носу\b/i, category: "remember", lang: "ru", weight: 2 },
-  { pattern: /\bвыучи\b/i, category: "remember", lang: "ru" },
-  { pattern: /\bзапиши\b/i, category: "remember", lang: "ru" },
-  { pattern: /\bна будущее\b/i, category: "remember", lang: "ru" },
-  { pattern: /\bимей в виду\b/i, category: "remember", lang: "ru" },
+  { pattern: /запомни/i, category: "remember", lang: "ru", weight: 2 },
+  { pattern: /не забудь/i, category: "remember", lang: "ru", weight: 2 },
+  { pattern: /помни/i, category: "remember", lang: "ru", weight: 2 },
+  { pattern: /учти/i, category: "remember", lang: "ru", weight: 2 },
+  { pattern: /заруби на носу/i, category: "remember", lang: "ru", weight: 2 },
+  { pattern: /выучи/i, category: "remember", lang: "ru" },
+  { pattern: /запиши/i, category: "remember", lang: "ru" },
+  { pattern: /на будущее/i, category: "remember", lang: "ru" },
+  { pattern: /имей в виду/i, category: "remember", lang: "ru" },
 
   // Ukrainian
-  { pattern: /\bзапам['']?ятай\b/i, category: "remember", lang: "uk", weight: 2 },
-  { pattern: /\bпам['']?ятай\b/i, category: "remember", lang: "uk", weight: 2 },
+  { pattern: /запам['']?ятай/i, category: "remember", lang: "uk", weight: 2 },
+  { pattern: /пам['']?ятай/i, category: "remember", lang: "uk", weight: 2 },
 
   // Belarusian
-  { pattern: /\bзапомні\b/i, category: "remember", lang: "by", weight: 2 },
-  { pattern: /\bне забудзь\b/i, category: "remember", lang: "by", weight: 2 },
-  { pattern: /\bпамятай\b/i, category: "remember", lang: "by", weight: 2 },
+  { pattern: /запомні/i, category: "remember", lang: "by", weight: 2 },
+  { pattern: /не забудзь/i, category: "remember", lang: "by", weight: 2 },
+  { pattern: /памятай/i, category: "remember", lang: "by", weight: 2 },
 
   // Kazakh
-  { pattern: /\bесте сақта\b/i, category: "remember", lang: "kk", weight: 2 },
-  { pattern: /\bұмытпа\b/i, category: "remember", lang: "kk", weight: 2 },
-  { pattern: /\bжаз(ып қой)?\b/i, category: "remember", lang: "kk" },
-  { pattern: /\bескер\b/i, category: "remember", lang: "kk" },
+  { pattern: /есте сақта/i, category: "remember", lang: "kk", weight: 2 },
+  { pattern: /ұмытпа/i, category: "remember", lang: "kk", weight: 2 },
+  { pattern: /жаз(ып қой)?/i, category: "remember", lang: "kk" },
+  { pattern: /ескер/i, category: "remember", lang: "kk" },
 
   // Czech
   { pattern: /\bzapamatuj si\b/i, category: "remember", lang: "cz", weight: 2 },
@@ -119,28 +119,28 @@ const PREFERENCE_TRIGGERS: TriggerPattern[] = [
   { pattern: /\bi don'?t (like|want|need)\b/i, category: "preference", lang: "en" },
 
   // Russian
-  { pattern: /\b(мне )?(нравится|люблю|предпочитаю|обожаю)\b/i, category: "preference", lang: "ru" },
-  { pattern: /\b(мне )?не (нравится|люблю)\b/i, category: "preference", lang: "ru" },
-  { pattern: /\bненавижу\b/i, category: "preference", lang: "ru" },
-  { pattern: /\bя хочу\b/i, category: "preference", lang: "ru" },
-  { pattern: /\bя не хочу\b/i, category: "preference", lang: "ru" },
-  { pattern: /\bмо[йяеё] любим[ыйаяое]+\b/i, category: "preference", lang: "ru" },
-  { pattern: /\bя фанат\b/i, category: "preference", lang: "ru" },
+  { pattern: /(мне )?(нравится|люблю|предпочитаю|обожаю)/i, category: "preference", lang: "ru" },
+  { pattern: /(мне )?не (нравится|люблю)/i, category: "preference", lang: "ru" },
+  { pattern: /ненавижу/i, category: "preference", lang: "ru" },
+  { pattern: /я хочу/i, category: "preference", lang: "ru" },
+  { pattern: /я не хочу/i, category: "preference", lang: "ru" },
+  { pattern: /мо[йяеё] любим[ыйаяое]+/i, category: "preference", lang: "ru" },
+  { pattern: /я фанат/i, category: "preference", lang: "ru" },
 
   // Ukrainian
-  { pattern: /\b(мені )?(подобається|люблю|віддаю перевагу)\b/i, category: "preference", lang: "uk" },
-  { pattern: /\bне (подобається|люблю)\b/i, category: "preference", lang: "uk" },
-  { pattern: /\bненавиджу\b/i, category: "preference", lang: "uk" },
+  { pattern: /(мені )?(подобається|люблю|віддаю перевагу)/i, category: "preference", lang: "uk" },
+  { pattern: /не (подобається|люблю)/i, category: "preference", lang: "uk" },
+  { pattern: /ненавиджу/i, category: "preference", lang: "uk" },
 
   // Belarusian
-  { pattern: /\b(мне )?(падабаецца|люблю|аддаю перавагу)\b/i, category: "preference", lang: "by" },
-  { pattern: /\bне (падабаецца|люблю)\b/i, category: "preference", lang: "by" },
+  { pattern: /(мне )?(падабаецца|люблю|аддаю перавагу)/i, category: "preference", lang: "by" },
+  { pattern: /не (падабаецца|люблю)/i, category: "preference", lang: "by" },
 
   // Kazakh
-  { pattern: /\b(маған )?(ұнайды|жақсы көремін)\b/i, category: "preference", lang: "kk" },
-  { pattern: /\bұнамайды\b/i, category: "preference", lang: "kk" },
-  { pattern: /\bжек көремін\b/i, category: "preference", lang: "kk" },
-  { pattern: /\bсүйікті\b/i, category: "preference", lang: "kk" },
+  { pattern: /(маған )?(ұнайды|жақсы көремін)/i, category: "preference", lang: "kk" },
+  { pattern: /ұнамайды/i, category: "preference", lang: "kk" },
+  { pattern: /жек көремін/i, category: "preference", lang: "kk" },
+  { pattern: /сүйікті/i, category: "preference", lang: "kk" },
 
   // Czech
   { pattern: /\b(mám )?rád\b/i, category: "preference", lang: "cz" },
@@ -187,24 +187,24 @@ const DECISION_TRIGGERS: TriggerPattern[] = [
   { pattern: /\bfrom now on\b/i, category: "decision", lang: "en" },
 
   // Russian
-  { pattern: /\b(мы )?решили\b/i, category: "decision", lang: "ru" },
-  { pattern: /\bбудем (использовать|применять)\b/i, category: "decision", lang: "ru" },
-  { pattern: /\bдавай (использовать|применять)\b/i, category: "decision", lang: "ru" },
-  { pattern: /\bотныне\b/i, category: "decision", lang: "ru" },
-  { pattern: /\bтеперь всегда\b/i, category: "decision", lang: "ru" },
+  { pattern: /(мы )?решили/i, category: "decision", lang: "ru" },
+  { pattern: /будем (использовать|применять)/i, category: "decision", lang: "ru" },
+  { pattern: /давай (использовать|применять)/i, category: "decision", lang: "ru" },
+  { pattern: /отныне/i, category: "decision", lang: "ru" },
+  { pattern: /теперь всегда/i, category: "decision", lang: "ru" },
 
   // Ukrainian
-  { pattern: /\b(ми )?вирішили\b/i, category: "decision", lang: "uk" },
-  { pattern: /\bбудемо (використовувати|застосовувати)\b/i, category: "decision", lang: "uk" },
+  { pattern: /(ми )?вирішили/i, category: "decision", lang: "uk" },
+  { pattern: /будемо (використовувати|застосовувати)/i, category: "decision", lang: "uk" },
 
   // Belarusian
-  { pattern: /\b(мы )?вырашылі\b/i, category: "decision", lang: "by" },
-  { pattern: /\bбудзем (выкарыстоўваць|ужываць)\b/i, category: "decision", lang: "by" },
+  { pattern: /(мы )?вырашылі/i, category: "decision", lang: "by" },
+  { pattern: /будзем (выкарыстоўваць|ужываць)/i, category: "decision", lang: "by" },
 
   // Kazakh
-  { pattern: /\b(біз )?шештік\b/i, category: "decision", lang: "kk" },
-  { pattern: /\bқолданамыз\b/i, category: "decision", lang: "kk" },
-  { pattern: /\bбастап\b/i, category: "decision", lang: "kk" },
+  { pattern: /(біз )?шештік/i, category: "decision", lang: "kk" },
+  { pattern: /қолданамыз/i, category: "decision", lang: "kk" },
+  { pattern: /бастап/i, category: "decision", lang: "kk" },
 
   // Czech
   { pattern: /\brozhodli jsme\b/i, category: "decision", lang: "cz" },
@@ -241,8 +241,14 @@ const DECISION_TRIGGERS: TriggerPattern[] = [
 // ============================================================================
 const IDENTITY_TRIGGERS: TriggerPattern[] = [
   // Common patterns (phone, email) - language-agnostic
-  // Universal phone: any country code (1-4 digits), various formats
-  { pattern: /(?:\+?\d{1,4})[\s\-\(]?(?:\d{3}[\s\-\)]?)?[\d\s\-\(\)]{7,14}/, category: "identity", lang: "common", weight: 2 },
+  // Phone detection: just need to recognize "looks like a phone", not validate the whole number
+  // Key: require + prefix OR separators to avoid matching plain numeric IDs
+  // International: + followed by digits with at least one separator (space, dash, parenthesis)
+  { pattern: /\+\d{1,4}[\s\-\(]\d/, category: "identity", lang: "common", weight: 2 },
+  // CIS 8-format: 8 followed by separator and digits
+  { pattern: /\b8[\s\-\(]\d{3}/, category: "identity", lang: "common", weight: 2 },
+  // Digits with separators in phone-like pattern (XXX-XXX or XXX XXX)
+  { pattern: /\b\d{3}[\s\-]\d{3}[\s\-]\d/, category: "identity", lang: "common", weight: 2 },
   // Email
   { pattern: /[\w.-]+@[\w.-]+\.\w{2,}/, category: "identity", lang: "common", weight: 2 },
 
@@ -253,24 +259,24 @@ const IDENTITY_TRIGGERS: TriggerPattern[] = [
   { pattern: /\bmy (phone|email|address|birthday)\b/i, category: "identity", lang: "en" },
 
   // Russian
-  { pattern: /\bменя зовут\b/i, category: "identity", lang: "ru", weight: 2 },
-  { pattern: /\bмоё? имя\b/i, category: "identity", lang: "ru", weight: 2 },
-  { pattern: /\bмне .* (год|года|лет)\b/i, category: "identity", lang: "ru", weight: 2 },
-  { pattern: /\bзови меня\b/i, category: "identity", lang: "ru" },
-  { pattern: /\bмой (телефон|email|адрес|день рождения)\b/i, category: "identity", lang: "ru" },
+  { pattern: /меня зовут/i, category: "identity", lang: "ru", weight: 2 },
+  { pattern: /моё? имя/i, category: "identity", lang: "ru", weight: 2 },
+  { pattern: /мне .* (год|года|лет)/i, category: "identity", lang: "ru", weight: 2 },
+  { pattern: /зови меня/i, category: "identity", lang: "ru" },
+  { pattern: /мой (телефон|email|адрес|день рождения)/i, category: "identity", lang: "ru" },
 
   // Ukrainian
-  { pattern: /\bмене звати\b/i, category: "identity", lang: "uk", weight: 2 },
-  { pattern: /\bмоє ім['']?я\b/i, category: "identity", lang: "uk", weight: 2 },
+  { pattern: /мене звати/i, category: "identity", lang: "uk", weight: 2 },
+  { pattern: /моє ім['']?я/i, category: "identity", lang: "uk", weight: 2 },
 
   // Belarusian
-  { pattern: /\bмяне завуць\b/i, category: "identity", lang: "by", weight: 2 },
-  { pattern: /\bмаё імя\b/i, category: "identity", lang: "by", weight: 2 },
+  { pattern: /мяне завуць/i, category: "identity", lang: "by", weight: 2 },
+  { pattern: /маё імя/i, category: "identity", lang: "by", weight: 2 },
 
   // Kazakh
-  { pattern: /\bменің атым\b/i, category: "identity", lang: "kk", weight: 2 },
-  { pattern: /\bмені .+ деп атаңыз\b/i, category: "identity", lang: "kk" },
-  { pattern: /\bменің (телефон|email|мекенжай)\b/i, category: "identity", lang: "kk" },
+  { pattern: /менің атым/i, category: "identity", lang: "kk", weight: 2 },
+  { pattern: /мені .+ деп атаңыз/i, category: "identity", lang: "kk" },
+  { pattern: /менің (телефон|email|мекенжай)/i, category: "identity", lang: "kk" },
 
   // Czech
   { pattern: /\bjmenuji se\b/i, category: "identity", lang: "cz", weight: 2 },
@@ -317,26 +323,26 @@ const FACT_TRIGGERS: TriggerPattern[] = [
   { pattern: /\bi have (a |an )?[\w]+\b/i, category: "fact", lang: "en" },
 
   // Russian
-  { pattern: /\bя (работаю|живу|учусь)\b/i, category: "fact", lang: "ru" },
-  { pattern: /\bу меня (есть|имеется)\b/i, category: "fact", lang: "ru" },
-  { pattern: /\bя по профессии\b/i, category: "fact", lang: "ru" },
-  { pattern: /\bя из\b/i, category: "fact", lang: "ru" },
-  { pattern: /\bя (была?|жила?|бывала?|ездила?|родил(?:ся|ась)|учил(?:ся|ась)) в\b/i, category: "fact", lang: "ru" },
-  { pattern: /\bя посещала?\b/i, category: "fact", lang: "ru" },
-  { pattern: /\bя закончила?\b/i, category: "fact", lang: "ru" },
+  { pattern: /я (работаю|живу|учусь)/i, category: "fact", lang: "ru" },
+  { pattern: /у меня (есть|имеется)/i, category: "fact", lang: "ru" },
+  { pattern: /я по профессии/i, category: "fact", lang: "ru" },
+  { pattern: /я из/i, category: "fact", lang: "ru" },
+  { pattern: /я (была?|жила?|бывала?|ездила?|учил(?:ся|ась)|родил(?:ся|ась))/i, category: "fact", lang: "ru" },
+  { pattern: /я посещала?/i, category: "fact", lang: "ru" },
+  { pattern: /я закончила?/i, category: "fact", lang: "ru" },
 
   // Ukrainian
-  { pattern: /\bя (працюю|живу|навчаюсь)\b/i, category: "fact", lang: "uk" },
-  { pattern: /\bу мене (є|маю)\b/i, category: "fact", lang: "uk" },
+  { pattern: /я (працюю|живу|навчаюсь)/i, category: "fact", lang: "uk" },
+  { pattern: /у мене (є|маю)/i, category: "fact", lang: "uk" },
 
   // Belarusian
-  { pattern: /\bя (працую|жыву|вучуся)\b/i, category: "fact", lang: "by" },
-  { pattern: /\bу мяне (ёсць|маю)\b/i, category: "fact", lang: "by" },
+  { pattern: /я (працую|жыву|вучуся)/i, category: "fact", lang: "by" },
+  { pattern: /у мяне (ёсць|маю)/i, category: "fact", lang: "by" },
 
   // Kazakh
-  { pattern: /\bмен (жұмыс істеймін|тұрамын|оқимын)\b/i, category: "fact", lang: "kk" },
-  { pattern: /\bменде (бар|жоқ)\b/i, category: "fact", lang: "kk" },
-  { pattern: /\bмен .+ болып жұмыс істеймін\b/i, category: "fact", lang: "kk" },
+  { pattern: /мен (жұмыс істеймін|тұрамын|оқимын)/i, category: "fact", lang: "kk" },
+  { pattern: /менде (бар|жоқ)/i, category: "fact", lang: "kk" },
+  { pattern: /мен .+ болып жұмыс істеймін/i, category: "fact", lang: "kk" },
 
   // Czech
   { pattern: /\bpracuji (v|u|pro)\b/i, category: "fact", lang: "cz" },
@@ -379,28 +385,28 @@ const IMPORTANCE_TRIGGERS: TriggerPattern[] = [
   { pattern: /\bmust (remember|know)\b/i, category: "importance", lang: "en" },
 
   // Russian
-  { pattern: /\bважно\b/i, category: "importance", lang: "ru" },
-  { pattern: /\bвсегда\b/i, category: "importance", lang: "ru" },
-  { pattern: /\bникогда\b/i, category: "importance", lang: "ru" },
-  { pattern: /\bобязательно\b/i, category: "importance", lang: "ru" },
-  { pattern: /\bкритично\b/i, category: "importance", lang: "ru" },
+  { pattern: /важно/i, category: "importance", lang: "ru" },
+  { pattern: /всегда/i, category: "importance", lang: "ru" },
+  { pattern: /никогда/i, category: "importance", lang: "ru" },
+  { pattern: /обязательно/i, category: "importance", lang: "ru" },
+  { pattern: /критично/i, category: "importance", lang: "ru" },
 
   // Ukrainian
-  { pattern: /\bважливо\b/i, category: "importance", lang: "uk" },
-  { pattern: /\bзавжди\b/i, category: "importance", lang: "uk" },
-  { pattern: /\bніколи\b/i, category: "importance", lang: "uk" },
-  { pattern: /\bобов['']?язково\b/i, category: "importance", lang: "uk" },
+  { pattern: /важливо/i, category: "importance", lang: "uk" },
+  { pattern: /завжди/i, category: "importance", lang: "uk" },
+  { pattern: /ніколи/i, category: "importance", lang: "uk" },
+  { pattern: /обов['']?язково/i, category: "importance", lang: "uk" },
 
   // Belarusian
-  { pattern: /\bважна\b/i, category: "importance", lang: "by" },
-  { pattern: /\bзаўсёды\b/i, category: "importance", lang: "by" },
-  { pattern: /\bніколі\b/i, category: "importance", lang: "by" },
+  { pattern: /важна/i, category: "importance", lang: "by" },
+  { pattern: /заўсёды/i, category: "importance", lang: "by" },
+  { pattern: /ніколі/i, category: "importance", lang: "by" },
 
   // Kazakh
-  { pattern: /\bмаңызды\b/i, category: "importance", lang: "kk" },
-  { pattern: /\bәрқашан\b/i, category: "importance", lang: "kk" },
-  { pattern: /\bешқашан\b/i, category: "importance", lang: "kk" },
-  { pattern: /\bміндетті түрде\b/i, category: "importance", lang: "kk" },
+  { pattern: /маңызды/i, category: "importance", lang: "kk" },
+  { pattern: /әрқашан/i, category: "importance", lang: "kk" },
+  { pattern: /ешқашан/i, category: "importance", lang: "kk" },
+  { pattern: /міндетті түрде/i, category: "importance", lang: "kk" },
 
   // Czech
   { pattern: /\bdůležité\b/i, category: "importance", lang: "cz" },

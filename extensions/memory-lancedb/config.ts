@@ -64,6 +64,7 @@ const EMBEDDING_DIMENSIONS: Record<string, number> = {
   "Xenova/all-MiniLM-L6-v2": 384,
   "Xenova/all-MiniLM-L12-v2": 384,
   "Xenova/paraphrase-multilingual-MiniLM-L12-v2": 384,
+  "Xenova/multilingual-e5-large": 1024,
 };
 
 function assertAllowedKeys(value: Record<string, unknown>, allowed: string[], label: string) {

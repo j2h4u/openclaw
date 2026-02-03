@@ -19,6 +19,7 @@ import {
   vectorDimsForModel,
 } from "./config.js";
 import { matchTrigger, type TriggerCategory } from "./triggers.js";
+import { stripMessageMetadata, parseEnvelopeMetadata } from "./message-utils.js";
 
 // ============================================================================
 // Types
@@ -31,6 +32,10 @@ type MemoryEntry = {
   importance: number;
   category: MemoryCategory;
   createdAt: number;
+  // Optional metadata (may be missing in older entries)
+  username?: string;
+  channel?: string;
+  chatId?: string;
 };
 
 type MemorySearchResult = {
@@ -118,6 +123,9 @@ class MemoryDB {
           importance: row.importance as number,
           category: row.category as MemoryEntry["category"],
           createdAt: row.createdAt as number,
+          username: row.username as string | undefined,
+          channel: row.channel as string | undefined,
+          chatId: row.chatId as string | undefined,
         },
         score,
       };
@@ -141,6 +149,49 @@ class MemoryDB {
     await this.ensureInitialized();
     return this.table!.countRows();
   }
+
+  async list(opts: { limit?: number; offset?: number } = {}): Promise<MemoryEntry[]> {
+    await this.ensureInitialized();
+    const limit = opts.limit ?? 20;
+    const offset = opts.offset ?? 0;
+
+    // LanceDB query with limit/offset
+    let query = this.table!.query().limit(limit);
+    if (offset > 0) {
+      // LanceDB doesn't have native offset, use filter workaround
+      // Sort by createdAt DESC and skip manually
+      const allRows = await this.table!.query().toArray();
+      const sorted = allRows.sort((a, b) => (b.createdAt as number) - (a.createdAt as number));
+      const sliced = sorted.slice(offset, offset + limit);
+      return sliced.map((row) => ({
+        id: row.id as string,
+        text: row.text as string,
+        vector: row.vector as number[],
+        importance: row.importance as number,
+        category: row.category as MemoryEntry["category"],
+        createdAt: row.createdAt as number,
+        username: row.username as string | undefined,
+        channel: row.channel as string | undefined,
+        chatId: row.chatId as string | undefined,
+      }));
+    }
+
+    const results = await query.toArray();
+    // Sort by createdAt DESC (newest first)
+    results.sort((a, b) => (b.createdAt as number) - (a.createdAt as number));
+
+    return results.map((row) => ({
+      id: row.id as string,
+      text: row.text as string,
+      vector: row.vector as number[],
+      importance: row.importance as number,
+      category: row.category as MemoryEntry["category"],
+      createdAt: row.createdAt as number,
+      username: row.username as string | undefined,
+      channel: row.channel as string | undefined,
+      chatId: row.chatId as string | undefined,
+    }));
+  }
 }
 
 // ============================================================================
@@ -149,6 +200,33 @@ class MemoryDB {
 
 interface EmbeddingProvider {
   embed(text: string): Promise<number[]>;
+}
+
+// Timing wrapper for embedding providers
+class TimedEmbeddings implements EmbeddingProvider {
+  private firstCall = true;
+
+  constructor(
+    private inner: EmbeddingProvider,
+    private logger: { info: (msg: string) => void },
+    private model: string,
+  ) {}
+
+  async embed(text: string): Promise<number[]> {
+    const start = performance.now();
+    const result = await this.inner.embed(text);
+    const elapsed = performance.now() - start;
+
+    if (this.firstCall) {
+      this.logger.info(`memory-lancedb: first embed (${this.model}): ${elapsed.toFixed(0)}ms (includes model load)`);
+      this.firstCall = false;
+    } else if (elapsed > 100) {
+      // Only log slow embeds (>100ms) to avoid spam
+      this.logger.info(`memory-lancedb: embed: ${elapsed.toFixed(0)}ms`);
+    }
+
+    return result;
+  }
 }
 
 class OpenAIEmbeddings implements EmbeddingProvider {
@@ -225,47 +303,58 @@ const TRIGGER_TO_CATEGORY: Record<TriggerCategory, MemoryCategory> = {
 };
 
 // Factory functions that accept language filter (called from register())
-function createShouldCapture(language: MemoryConfig["language"], debug: (msg: string) => void) {
+// infoLog is passed separately for temporary diagnostics (TEMP)
+function createShouldCapture(language: MemoryConfig["language"], debug: (msg: string) => void, infoLog: (msg: string) => void) {
   return function shouldCapture(text: string): boolean {
-    const preview = text.length > 60 ? text.slice(0, 60) + "..." : text;
+    const cleanText = stripMessageMetadata(text);
 
-    if (text.length < 10) {
-      debug(`[capture] SKIP (too short: ${text.length} chars): "${preview}"`);
+    // If original had memories tag, log and use clean version
+    if (cleanText !== text) {
+      debug(`[capture] Stripped memories tag, clean text: "${cleanText.slice(0, 60)}..."`);
+      infoLog(`[shouldCapture] Stripped memories tag, evaluating clean text`); // TEMP
+    }
+
+    const preview = cleanText.length > 60 ? cleanText.slice(0, 60) + "..." : cleanText;
+
+    if (cleanText.length < 10) {
+      debug(`[capture] SKIP (too short: ${cleanText.length} chars): "${preview}"`);
+      infoLog(`[shouldCapture] SKIP (too short: ${cleanText.length}): "${preview}"`); // TEMP
       return false;
     }
-    if (text.length > 500) {
-      debug(`[capture] SKIP (too long: ${text.length} chars): "${preview}"`);
+    if (cleanText.length > 500) {
+      debug(`[capture] SKIP (too long: ${cleanText.length} chars): "${preview}"`);
+      infoLog(`[shouldCapture] SKIP (too long: ${cleanText.length}): "${preview}"`); // TEMP
       return false;
     }
-    // Skip injected context from memory recall
-    if (text.includes("<relevant-memories>")) {
-      debug(`[capture] SKIP (contains memories tag): "${preview}"`);
-      return false;
-    }
-    // Skip system-generated content
-    if (text.startsWith("<") && text.includes("</")) {
+    // Skip system-generated content (but not if it was just memories that we stripped)
+    if (cleanText.startsWith("<") && cleanText.includes("</")) {
       debug(`[capture] SKIP (system content): "${preview}"`);
+      infoLog(`[shouldCapture] SKIP (system content): "${preview}"`); // TEMP
       return false;
     }
     // Skip agent summary responses (contain markdown formatting)
-    if (text.includes("**") && text.includes("\n-")) {
+    if (cleanText.includes("**") && cleanText.includes("\n-")) {
       debug(`[capture] SKIP (markdown response): "${preview}"`);
+      infoLog(`[shouldCapture] SKIP (markdown): "${preview}"`); // TEMP
       return false;
     }
     // Skip emoji-heavy responses (likely agent output)
-    const emojiCount = (text.match(/[\u{1F300}-\u{1F9FF}]/gu) || []).length;
+    const emojiCount = (cleanText.match(/[\u{1F300}-\u{1F9FF}]/gu) || []).length;
     if (emojiCount > 3) {
       debug(`[capture] SKIP (emoji-heavy: ${emojiCount}): "${preview}"`);
+      infoLog(`[shouldCapture] SKIP (emoji ${emojiCount}): "${preview}"`); // TEMP
       return false;
     }
 
-    const match = matchTrigger(text, language);
+    const match = matchTrigger(cleanText, language);
     if (match) {
       debug(`[capture] MATCH trigger "${match.category}" (lang: ${match.lang}, weight: ${match.weight}): "${preview}"`);
+      infoLog(`[shouldCapture] MATCH ${match.category}/${match.lang}: "${preview}"`); // TEMP
       return true;
     }
 
     debug(`[capture] SKIP (no trigger matched, lang filter: ${JSON.stringify(language)}): "${preview}"`);
+    infoLog(`[shouldCapture] SKIP (no trigger, lang=${JSON.stringify(language)}): "${preview}"`); // TEMP
     return false;
   };
 }
@@ -300,14 +389,17 @@ const memoryPlugin = {
 
     // Debug logger for capture analysis (visible in gateway logs)
     const debug = (msg: string) => api.logger.debug?.(`memory-lancedb: ${msg}`);
+    // TEMP: info-level logging for auto-capture diagnostics
+    const infoLog = (msg: string) => api.logger.info(`memory-lancedb: ${msg}`);
 
     // Create capture functions with language filter from config
-    const shouldCapture = createShouldCapture(cfg.language, debug);
+    const shouldCapture = createShouldCapture(cfg.language, debug, infoLog);
     const detectCategory = createDetectCategory(cfg.language);
     const db = new MemoryDB(resolvedDbPath, vectorDim);
-    const embeddings = createEmbeddingProvider(cfg.embedding);
+    const modelName = cfg.embedding.model ?? (cfg.embedding.provider === "local" ? "Xenova/all-MiniLM-L6-v2" : "text-embedding-3-small");
+    const embeddings = new TimedEmbeddings(createEmbeddingProvider(cfg.embedding), api.logger, modelName);
 
-    api.logger.info(`memory-lancedb: plugin registered (db: ${resolvedDbPath}, lazy init)`);
+    api.logger.info(`memory-lancedb: plugin registered (db: ${resolvedDbPath}, model: ${modelName}, lazy init)`);
 
     // ========================================================================
     // Tools
@@ -500,10 +592,49 @@ const memoryPlugin = {
 
         memory
           .command("list")
-          .description("List memories")
-          .action(async () => {
+          .description("List all memories with pagination")
+          .option("--limit <n>", "Number of items per page", "20")
+          .option("--offset <n>", "Skip first N items", "0")
+          .option("--json", "Output as JSON")
+          .action(async (opts) => {
+            const limit = parseInt(opts.limit);
+            const offset = parseInt(opts.offset);
             const count = await db.count();
-            console.log(`Total memories: ${count}`);
+            const entries = await db.list({ limit, offset });
+
+            if (opts.json) {
+              console.log(JSON.stringify({ total: count, offset, limit, entries: entries.map(e => ({
+                id: e.id,
+                text: e.text,
+                category: e.category,
+                importance: e.importance,
+                createdAt: new Date(e.createdAt).toISOString(),
+                username: e.username,
+                channel: e.channel,
+                chatId: e.chatId,
+              }))}, null, 2));
+              return;
+            }
+
+            console.log(`\nMemories (${offset + 1}-${Math.min(offset + entries.length, count)} of ${count}):\n`);
+            for (const entry of entries) {
+              const date = new Date(entry.createdAt).toLocaleString();
+              const truncatedText = entry.text.length > 100
+                ? entry.text.slice(0, 100) + "..."
+                : entry.text;
+              // Build metadata line
+              const meta = [
+                entry.username ? `@${entry.username}` : null,
+                entry.channel,
+              ].filter(Boolean).join(" via ");
+              const metaPrefix = meta ? `(${meta}) ` : "";
+              console.log(`[${entry.category}] ${metaPrefix}${truncatedText}`);
+              console.log(`  id: ${entry.id} | importance: ${entry.importance} | ${date}\n`);
+            }
+
+            if (offset + entries.length < count) {
+              console.log(`\nNext page: ltm list --offset ${offset + limit} --limit ${limit}`);
+            }
           });
 
         memory
@@ -583,6 +714,8 @@ const memoryPlugin = {
             .map((m) => m?.role ?? "unknown")
             .join(", ");
           debug(`[agent_end] Processing ${event.messages.length} messages, roles: [${roles}]`);
+          // TEMP: info-level diagnostics for auto-capture investigation
+          api.logger.info(`memory-lancedb: [agent_end] ${event.messages.length} messages, roles: [${roles}]`);
 
           // Extract text content from messages (handling unknown[] type)
           const texts: string[] = [];
@@ -624,15 +757,29 @@ const memoryPlugin = {
             }
           }
 
+          // TEMP: log extracted texts for debugging
+          api.logger.info(`memory-lancedb: [agent_end] extracted ${texts.length} texts: ${texts.map(t => t.length > 50 ? t.slice(0, 50) + "..." : t).join(" | ")}`);
+
           // Filter for capturable content
           const toCapture = texts.filter((text) => text && shouldCapture(text));
+          // TEMP: log capture decision
+          api.logger.info(`memory-lancedb: [agent_end] toCapture: ${toCapture.length} of ${texts.length}`);
           if (toCapture.length === 0) {
             return;
           }
 
           // Store each capturable piece (limit to 3 per conversation)
           let stored = 0;
-          for (const text of toCapture.slice(0, 3)) {
+          for (const rawText of toCapture.slice(0, 3)) {
+            // Extract metadata from envelope BEFORE stripping it
+            const metadata = parseEnvelopeMetadata(rawText);
+
+            // Clean the text before storing (remove injected memory context)
+            const text = stripMessageMetadata(rawText);
+            if (!text || text.length < 10) {
+              continue; // Skip if cleaning left nothing meaningful
+            }
+
             const category = detectCategory(text);
             const vector = await embeddings.embed(text);
 
@@ -647,6 +794,9 @@ const memoryPlugin = {
               vector,
               importance: 0.7,
               category,
+              username: metadata.username,
+              channel: metadata.channel,
+              chatId: metadata.chatId,
             });
             stored++;
           }

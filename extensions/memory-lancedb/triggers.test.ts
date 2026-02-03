@@ -97,26 +97,32 @@ describe("triggers", () => {
 
     describe("Common patterns", () => {
       test("matches phone number +7 format", () => {
-        const result = matchTrigger("мой телефон +79139154040", "ru");
+        const result = matchTrigger("мой телефон +75558887766", "ru");
         expect(result).not.toBeNull();
         // Either phone pattern (common) or 'мой телефон' (ru)
         expect(["common", "ru"]).toContain(result?.lang);
       });
 
-      test("matches phone number 8 format", () => {
-        const result = matchTrigger("позвони мне 89139154040", "ru");
+      test("matches phone number 8 format with separator", () => {
+        const result = matchTrigger("позвони мне 8-555-888-77-66", "ru");
         expect(result).not.toBeNull();
         expect(result?.lang).toBe("common");
       });
 
+      test("does NOT match phone without separators (avoid ID false positives)", () => {
+        const result = matchTrigger("позвони мне 85558887766", "ru");
+        // Plain digits without separators should not match to avoid Telegram ID false positives
+        expect(result === null || result.lang !== "common").toBe(true);
+      });
+
       test("matches phone with spaces", () => {
-        const result = matchTrigger("номер: +7 913 915 4040", "ru");
+        const result = matchTrigger("номер: +7 555 888 7766", "ru");
         expect(result).not.toBeNull();
         expect(result?.lang).toBe("common");
       });
 
       test("matches phone with dashes", () => {
-        const result = matchTrigger("телефон: 8-913-915-40-40", "ru");
+        const result = matchTrigger("телефон: 8-555-888-77-66", "ru");
         expect(result).not.toBeNull();
         expect(result?.lang).toBe("common");
       });
