@@ -184,14 +184,6 @@ export async function dispatchReplyFromConfig(params: {
             senderName: ctx.SenderName,
             senderUsername: ctx.SenderUsername,
             senderE164: ctx.SenderE164,
-            // Forward metadata
-            forwardedFrom: ctx.ForwardedFrom,
-            forwardedFromType: ctx.ForwardedFromType,
-            forwardedFromId: ctx.ForwardedFromId,
-            forwardedFromUsername: ctx.ForwardedFromUsername,
-            forwardedFromTitle: ctx.ForwardedFromTitle,
-            forwardedFromSignature: ctx.ForwardedFromSignature,
-            forwardedDate: ctx.ForwardedDate,
           },
         },
         {
