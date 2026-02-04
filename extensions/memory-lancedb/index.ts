@@ -236,8 +236,9 @@ class OpenAIEmbeddings implements EmbeddingProvider {
   constructor(
     apiKey: string,
     private model: string,
+    baseUrl?: string,
   ) {
-    this.client = new OpenAI({ apiKey });
+    this.client = new OpenAI({ apiKey, baseURL: baseUrl });
   }
 
   async embed(text: string): Promise<number[]> {
@@ -287,7 +288,7 @@ function createEmbeddingProvider(
   if (cfg.provider === "local") {
     return new LocalEmbeddings(cfg.model ?? "Xenova/all-MiniLM-L6-v2");
   }
-  return new OpenAIEmbeddings(cfg.apiKey, cfg.model ?? "text-embedding-3-small");
+  return new OpenAIEmbeddings(cfg.apiKey, cfg.model ?? "text-embedding-3-small", cfg.baseUrl);
 }
 
 // ============================================================================

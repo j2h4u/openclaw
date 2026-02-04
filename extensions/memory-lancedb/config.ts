@@ -10,6 +10,7 @@ export type MemoryConfig = {
         provider: "openai";
         model?: string;
         apiKey: string;
+        baseUrl?: string;
       }
     | {
         provider: "local";
@@ -65,6 +66,8 @@ const EMBEDDING_DIMENSIONS: Record<string, number> = {
   "Xenova/all-MiniLM-L12-v2": 384,
   "Xenova/paraphrase-multilingual-MiniLM-L12-v2": 384,
   "Xenova/multilingual-e5-large": 1024,
+  // HuggingFace models (for TEI/remote servers)
+  "intfloat/multilingual-e5-large": 1024,
 };
 
 function assertAllowedKeys(value: Record<string, unknown>, allowed: string[], label: string) {
@@ -153,14 +156,16 @@ export const memoryConfigSchema = {
     if (typeof embedding.apiKey !== "string") {
       throw new Error("embedding.apiKey is required for OpenAI provider");
     }
-    assertAllowedKeys(embedding, ["provider", "apiKey", "model"], "embedding config");
+    assertAllowedKeys(embedding, ["provider", "apiKey", "model", "baseUrl"], "embedding config");
     const model = resolveEmbeddingModel(embedding, "openai");
+    const baseUrl = typeof embedding.baseUrl === "string" ? embedding.baseUrl : undefined;
 
     return {
       embedding: {
         provider: "openai",
         model,
         apiKey: resolveEnvVars(embedding.apiKey),
+        baseUrl,
       },
       dbPath: typeof cfg.dbPath === "string" ? cfg.dbPath : DEFAULT_DB_PATH,
       autoCapture: cfg.autoCapture !== false,
@@ -183,6 +188,12 @@ export const memoryConfigSchema = {
       label: "Embedding Model",
       placeholder: DEFAULT_LOCAL_MODEL,
       help: "Model to use: Xenova/all-MiniLM-L6-v2 (local) or text-embedding-3-small (OpenAI)",
+    },
+    "embedding.baseUrl": {
+      label: "API Base URL",
+      placeholder: "https://api.openai.com/v1",
+      help: "Custom base URL for OpenAI-compatible API (e.g., local TEI server)",
+      advanced: true,
     },
     dbPath: {
       label: "Database Path",
