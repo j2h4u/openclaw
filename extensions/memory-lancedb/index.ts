@@ -50,6 +50,15 @@ type MemorySearchResult = {
 
 const TABLE_NAME = "memories";
 
+// Timeout for LanceDB operations (60 seconds) - prevents Event Loop blocking
+const LANCEDB_TIMEOUT_MS = 60_000;
+
+type Logger = {
+  debug?: (msg: string) => void;
+  info: (msg: string) => void;
+  warn: (msg: string) => void;
+};
+
 class MemoryDB {
   private db: lancedb.Connection | null = null;
   private table: lancedb.Table | null = null;
@@ -58,6 +67,7 @@ class MemoryDB {
   constructor(
     private readonly dbPath: string,
     private readonly vectorDim: number,
+    private readonly logger?: Logger,
   ) {}
 
   private async ensureInitialized(): Promise<void> {
@@ -102,14 +112,38 @@ class MemoryDB {
       createdAt: Date.now(),
     };
 
+    const startMs = Date.now();
+    this.logger?.debug?.(`memory-lancedb: [db.store] starting`);
+
     await this.table!.add([fullEntry]);
+
+    const elapsed = Date.now() - startMs;
+    if (elapsed > 1000) {
+      this.logger?.warn(`memory-lancedb: [db.store] slow write: ${elapsed}ms`);
+    } else {
+      this.logger?.debug?.(`memory-lancedb: [db.store] completed in ${elapsed}ms`);
+    }
+
     return fullEntry;
   }
 
   async search(vector: number[], limit = 5, minScore = 0.5): Promise<MemorySearchResult[]> {
     await this.ensureInitialized();
 
-    const results = await this.table!.vectorSearch(vector).limit(limit).toArray();
+    const startMs = Date.now();
+    this.logger?.debug?.(`memory-lancedb: [db.search] starting (limit=${limit})`);
+
+    const results = await this.table!
+      .vectorSearch(vector)
+      .limit(limit)
+      .toArray({ timeoutMs: LANCEDB_TIMEOUT_MS });
+
+    const elapsed = Date.now() - startMs;
+    if (elapsed > 1000) {
+      this.logger?.warn(`memory-lancedb: [db.search] slow query: ${elapsed}ms`);
+    } else {
+      this.logger?.debug?.(`memory-lancedb: [db.search] completed in ${elapsed}ms`);
+    }
 
     // LanceDB uses L2 distance by default; convert to similarity score
     const mapped = results.map((row) => {
@@ -397,7 +431,11 @@ const memoryPlugin = {
     // Create capture functions with language filter from config
     const shouldCapture = createShouldCapture(cfg.language, debug, infoLog);
     const detectCategory = createDetectCategory(cfg.language);
-    const db = new MemoryDB(resolvedDbPath, vectorDim);
+    const db = new MemoryDB(resolvedDbPath, vectorDim, {
+      debug: (msg) => api.logger.debug?.(msg),
+      info: (msg) => api.logger.info(msg),
+      warn: (msg) => api.logger.warn(msg),
+    });
     const modelName = cfg.embedding.model ?? (cfg.embedding.provider === "local" ? "Xenova/all-MiniLM-L6-v2" : "text-embedding-3-small");
     const embeddings = new TimedEmbeddings(createEmbeddingProvider(cfg.embedding), api.logger, modelName);
 
