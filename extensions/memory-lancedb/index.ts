@@ -6,8 +6,8 @@
  * Provides seamless auto-recall and auto-capture via lifecycle hooks.
  */
 
+import type * as LanceDB from "@lancedb/lancedb";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
-import * as lancedb from "@lancedb/lancedb";
 import { Type } from "@sinclair/typebox";
 import { randomUUID } from "node:crypto";
 import OpenAI from "openai";
@@ -25,6 +25,19 @@ import { stripMessageMetadata, parseEnvelopeMetadata } from "./message-utils.js"
 // ============================================================================
 // Types
 // ============================================================================
+
+let lancedbImportPromise: Promise<typeof import("@lancedb/lancedb")> | null = null;
+const loadLanceDB = async (): Promise<typeof import("@lancedb/lancedb")> => {
+  if (!lancedbImportPromise) {
+    lancedbImportPromise = import("@lancedb/lancedb");
+  }
+  try {
+    return await lancedbImportPromise;
+  } catch (err) {
+    // Common on macOS today: upstream package may not ship darwin native bindings.
+    throw new Error(`memory-lancedb: failed to load LanceDB. ${String(err)}`);
+  }
+};
 
 type MemoryEntry = {
   id: string;
@@ -60,8 +73,8 @@ type Logger = {
 };
 
 class MemoryDB {
-  private db: lancedb.Connection | null = null;
-  private table: lancedb.Table | null = null;
+  private db: LanceDB.Connection | null = null;
+  private table: LanceDB.Table | null = null;
   private initPromise: Promise<void> | null = null;
 
   constructor(
@@ -83,6 +96,7 @@ class MemoryDB {
   }
 
   private async doInitialize(): Promise<void> {
+    const lancedb = await loadLanceDB();
     this.db = await lancedb.connect(this.dbPath);
     const tables = await this.db.tableNames();
 
