@@ -26,7 +26,7 @@ RUN --mount=type=cache,target=/root/.pnpm-store \
 
 COPY --chown=node:node . .
 RUN OPENCLAW_A2UI_SKIP_MISSING=1 pnpm build && \
-    chown -R node:node dist node_modules
+    chown -R node:node dist
 # Force pnpm for UI build (Bun may fail on ARM/Synology architectures)
 ENV OPENCLAW_PREFER_PNPM=1
 RUN pnpm ui:build
