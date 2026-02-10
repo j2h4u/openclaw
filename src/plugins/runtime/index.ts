@@ -42,7 +42,6 @@ import { resolveCommandAuthorizedFromAuthorizers } from "../../channels/command-
 import { discordMessageActions } from "../../channels/plugins/actions/discord.js";
 import { signalMessageActions } from "../../channels/plugins/actions/signal.js";
 import { telegramMessageActions } from "../../channels/plugins/actions/telegram.js";
-import { createTelegramRawUpdateTool } from "../../telegram/tools/telegram-raw-update.js";
 import { createWhatsAppLoginTool } from "../../channels/plugins/agent-tools/whatsapp-login.js";
 import { recordInboundSession } from "../../channels/session.js";
 import { monitorWebChannel } from "../../channels/web/index.js";
@@ -131,6 +130,7 @@ import { monitorTelegramProvider } from "../../telegram/monitor.js";
 import { probeTelegram } from "../../telegram/probe.js";
 import { sendMessageTelegram } from "../../telegram/send.js";
 import { resolveTelegramToken } from "../../telegram/token.js";
+import { createTelegramRawUpdateTool } from "../../telegram/tools/telegram-raw-update.js";
 import { textToSpeechTelephony } from "../../tts/tts.js";
 import { getActiveWebListener } from "../../web/active-listener.js";
 import {
@@ -212,6 +212,7 @@ export function createPluginRuntime(): PluginRuntime {
         dispatchReplyFromConfig,
         finalizeInboundContext,
         formatAgentEnvelope,
+        /** @deprecated Prefer `BodyForAgent` + structured user-context blocks (do not build plaintext envelopes for prompts). */
         formatInboundEnvelope,
         resolveEnvelopeFormatOptions,
       },

@@ -19,8 +19,8 @@ import {
   memoryConfigSchema,
   vectorDimsForModel,
 } from "./config.js";
-import { matchTrigger, type TriggerCategory } from "./triggers.js";
 import { stripMessageMetadata, parseEnvelopeMetadata } from "./message-utils.js";
+import { matchTrigger, type TriggerCategory } from "./triggers.js";
 
 // ============================================================================
 // Types
@@ -35,7 +35,7 @@ const loadLanceDB = async (): Promise<typeof import("@lancedb/lancedb")> => {
     return await lancedbImportPromise;
   } catch (err) {
     // Common on macOS today: upstream package may not ship darwin native bindings.
-    throw new Error(`memory-lancedb: failed to load LanceDB. ${String(err)}`);
+    throw new Error(`memory-lancedb: failed to load LanceDB. ${String(err)}`, { cause: err });
   }
 };
 
@@ -147,8 +147,7 @@ class MemoryDB {
     const startMs = Date.now();
     this.logger?.debug?.(`memory-lancedb: [db.search] starting (limit=${limit})`);
 
-    const results = await this.table!
-      .vectorSearch(vector)
+    const results = await this.table!.vectorSearch(vector)
       .limit(limit)
       .toArray({ timeoutMs: LANCEDB_TIMEOUT_MS });
 
@@ -267,7 +266,9 @@ class TimedEmbeddings implements EmbeddingProvider {
     const elapsed = performance.now() - start;
 
     if (this.firstCall) {
-      this.logger.info(`memory-lancedb: first embed (${this.model}): ${elapsed.toFixed(0)}ms (includes model load)`);
+      this.logger.info(
+        `memory-lancedb: first embed (${this.model}): ${elapsed.toFixed(0)}ms (includes model load)`,
+      );
       this.firstCall = false;
     } else if (elapsed > 100) {
       // Only log slow embeds (>100ms) to avoid spam
@@ -354,7 +355,11 @@ const TRIGGER_TO_CATEGORY: Record<TriggerCategory, MemoryCategory> = {
 
 // Factory functions that accept language filter (called from register())
 // infoLog is passed separately for temporary diagnostics (TEMP)
-function createShouldCapture(language: MemoryConfig["language"], debug: (msg: string) => void, infoLog: (msg: string) => void) {
+function createShouldCapture(
+  language: MemoryConfig["language"],
+  debug: (msg: string) => void,
+  infoLog: (msg: string) => void,
+) {
   return function shouldCapture(text: string): boolean {
     const cleanText = stripMessageMetadata(text);
 
@@ -398,12 +403,16 @@ function createShouldCapture(language: MemoryConfig["language"], debug: (msg: st
 
     const match = matchTrigger(cleanText, language);
     if (match) {
-      debug(`[capture] MATCH trigger "${match.category}" (lang: ${match.lang}, weight: ${match.weight}): "${preview}"`);
+      debug(
+        `[capture] MATCH trigger "${match.category}" (lang: ${match.lang}, weight: ${match.weight}): "${preview}"`,
+      );
       infoLog(`[shouldCapture] MATCH ${match.category}/${match.lang}: "${preview}"`); // TEMP
       return true;
     }
 
-    debug(`[capture] SKIP (no trigger matched, lang filter: ${JSON.stringify(language)}): "${preview}"`);
+    debug(
+      `[capture] SKIP (no trigger matched, lang filter: ${JSON.stringify(language)}): "${preview}"`,
+    );
     infoLog(`[shouldCapture] SKIP (no trigger, lang=${JSON.stringify(language)}): "${preview}"`); // TEMP
     return false;
   };
@@ -450,10 +459,18 @@ const memoryPlugin = {
       info: (msg) => api.logger.info(msg),
       warn: (msg) => api.logger.warn(msg),
     });
-    const modelName = cfg.embedding.model ?? (cfg.embedding.provider === "local" ? "Xenova/all-MiniLM-L6-v2" : "text-embedding-3-small");
-    const embeddings = new TimedEmbeddings(createEmbeddingProvider(cfg.embedding), api.logger, modelName);
+    const modelName =
+      cfg.embedding.model ??
+      (cfg.embedding.provider === "local" ? "Xenova/all-MiniLM-L6-v2" : "text-embedding-3-small");
+    const embeddings = new TimedEmbeddings(
+      createEmbeddingProvider(cfg.embedding),
+      api.logger,
+      modelName,
+    );
 
-    api.logger.info(`memory-lancedb: plugin registered (db: ${resolvedDbPath}, model: ${modelName}, lazy init)`);
+    api.logger.info(
+      `memory-lancedb: plugin registered (db: ${resolvedDbPath}, model: ${modelName}, lazy init)`,
+    );
 
     // ========================================================================
     // Tools
@@ -657,30 +674,41 @@ const memoryPlugin = {
             const entries = await db.list({ limit, offset });
 
             if (opts.json) {
-              console.log(JSON.stringify({ total: count, offset, limit, entries: entries.map(e => ({
-                id: e.id,
-                text: e.text,
-                category: e.category,
-                importance: e.importance,
-                createdAt: new Date(e.createdAt).toISOString(),
-                username: e.username,
-                channel: e.channel,
-                chatId: e.chatId,
-              }))}, null, 2));
+              console.log(
+                JSON.stringify(
+                  {
+                    total: count,
+                    offset,
+                    limit,
+                    entries: entries.map((e) => ({
+                      id: e.id,
+                      text: e.text,
+                      category: e.category,
+                      importance: e.importance,
+                      createdAt: new Date(e.createdAt).toISOString(),
+                      username: e.username,
+                      channel: e.channel,
+                      chatId: e.chatId,
+                    })),
+                  },
+                  null,
+                  2,
+                ),
+              );
               return;
             }
 
-            console.log(`\nMemories (${offset + 1}-${Math.min(offset + entries.length, count)} of ${count}):\n`);
+            console.log(
+              `\nMemories (${offset + 1}-${Math.min(offset + entries.length, count)} of ${count}):\n`,
+            );
             for (const entry of entries) {
               const date = new Date(entry.createdAt).toLocaleString();
-              const truncatedText = entry.text.length > 100
-                ? entry.text.slice(0, 100) + "..."
-                : entry.text;
+              const truncatedText =
+                entry.text.length > 100 ? entry.text.slice(0, 100) + "..." : entry.text;
               // Build metadata line
-              const meta = [
-                entry.username ? `@${entry.username}` : null,
-                entry.channel,
-              ].filter(Boolean).join(" via ");
+              const meta = [entry.username ? `@${entry.username}` : null, entry.channel]
+                .filter(Boolean)
+                .join(" via ");
               const metaPrefix = meta ? `(${meta}) ` : "";
               console.log(`[${entry.category}] ${metaPrefix}${truncatedText}`);
               console.log(`  id: ${entry.id} | importance: ${entry.importance} | ${date}\n`);
@@ -769,7 +797,9 @@ const memoryPlugin = {
             .join(", ");
           debug(`[agent_end] Processing ${event.messages.length} messages, roles: [${roles}]`);
           // TEMP: info-level diagnostics for auto-capture investigation
-          api.logger.info(`memory-lancedb: [agent_end] ${event.messages.length} messages, roles: [${roles}]`);
+          api.logger.info(
+            `memory-lancedb: [agent_end] ${event.messages.length} messages, roles: [${roles}]`,
+          );
 
           // Extract text content from messages (handling unknown[] type)
           const texts: string[] = [];
@@ -812,12 +842,16 @@ const memoryPlugin = {
           }
 
           // TEMP: log extracted texts for debugging
-          api.logger.info(`memory-lancedb: [agent_end] extracted ${texts.length} texts: ${texts.map(t => t.length > 50 ? t.slice(0, 50) + "..." : t).join(" | ")}`);
+          api.logger.info(
+            `memory-lancedb: [agent_end] extracted ${texts.length} texts: ${texts.map((t) => (t.length > 50 ? t.slice(0, 50) + "..." : t)).join(" | ")}`,
+          );
 
           // Filter for capturable content
           const toCapture = texts.filter((text) => text && shouldCapture(text));
           // TEMP: log capture decision
-          api.logger.info(`memory-lancedb: [agent_end] toCapture: ${toCapture.length} of ${texts.length}`);
+          api.logger.info(
+            `memory-lancedb: [agent_end] toCapture: ${toCapture.length} of ${texts.length}`,
+          );
           if (toCapture.length === 0) {
             return;
           }
