@@ -21,10 +21,12 @@ COPY ui/package.json ./ui/package.json
 COPY patches ./patches
 COPY scripts ./scripts
 
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,target=/root/.pnpm-store \
+    pnpm install --frozen-lockfile
 
-COPY . .
-RUN OPENCLAW_A2UI_SKIP_MISSING=1 pnpm build
+COPY --chown=node:node . .
+RUN OPENCLAW_A2UI_SKIP_MISSING=1 pnpm build && \
+    chown -R node:node dist node_modules
 # Force pnpm for UI build (Bun may fail on ARM/Synology architectures)
 ENV OPENCLAW_PREFER_PNPM=1
 RUN pnpm ui:build
@@ -32,7 +34,8 @@ RUN pnpm ui:build
 # Install LanceDB plugin dependencies (per docs: install in extension directory)
 # Remove devDeps (workspace: protocol incompatible with standalone npm install)
 # Fix permissions for Xenova cache (runs as node user)
-RUN cd extensions/memory-lancedb && \
+RUN --mount=type=cache,target=/root/.npm \
+    cd extensions/memory-lancedb && \
     node -e "const p=require('./package.json'); delete p.devDependencies; require('fs').writeFileSync('./package.json', JSON.stringify(p, null, 2))" && \
     npm install && \
     chown -R node:node node_modules
@@ -40,7 +43,8 @@ RUN cd extensions/memory-lancedb && \
 ENV NODE_ENV=production
 
 # Allow non-root user to write temp files during runtime/tests.
-RUN chown -R node:node /app
+# Avoid recursive chown over /app to keep builds fast.
+ENV TMPDIR=/tmp
 
 # Security hardening: Run as non-root user
 # The node:22-bookworm image includes a 'node' user (uid 1000)
