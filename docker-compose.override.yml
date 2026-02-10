@@ -7,6 +7,10 @@ services:
     volumes:
       - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
       - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+      - /srv/beads:/home/node/beads
+      - /var/lib/disk-health:/home/node/alerts/disk-health:ro
+      - /var/lib/temperature-monitor:/home/node/alerts/temperature:ro
+      - /var/lib/borg-backup:/home/node/alerts/borg:ro
     tmpfs:
       - /home/node:size=512M,uid=1000,gid=1000
 
