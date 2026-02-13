@@ -1,0 +1,199 @@
+name: Fork Maintenance
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # 07:00 UTC / 12:00 Almaty
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  auto-rebase:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ${{ fromJson(needs.load-config.outputs.pr_branches) }}
+    needs: load-config
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ matrix.branch }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/openclaw/openclaw.git || true
+          git fetch upstream main
+
+      - name: Rebase on upstream/main
+        id: rebase
+        run: |
+          if git rebase upstream/main; then
+            echo "status=success" >> "$GITHUB_OUTPUT"
+          else
+            git rebase --abort
+            echo "status=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Force-push on success
+        if: steps.rebase.outputs.status == 'success'
+        run: git push --force-with-lease origin ${{ matrix.branch }}
+
+      - name: Close conflict issue if rebase succeeded
+        if: steps.rebase.outputs.status == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          issue=$(gh issue list --label "auto-rebase" --state open --search "Rebase conflict: ${{ matrix.branch }}" --json number --jq '.[0].number')
+          if [ -n "$issue" ]; then
+            gh issue close "$issue" --comment "Rebase conflict resolved automatically."
+          fi
+
+      - name: Create/update conflict issue
+        if: steps.rebase.outputs.status == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Rebase conflict: ${{ matrix.branch }}"
+          BODY="Branch \`${{ matrix.branch }}\` has rebase conflicts with \`upstream/main\`.
+
+          Requires manual resolution. Check the [workflow run logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for conflict details.
+
+          _Updated: $(date -u '+%Y-%m-%d %H:%M UTC')_"
+
+          existing=$(gh issue list --label "auto-rebase" --state open --search "$TITLE" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --body "$BODY" --label "fork-maintenance,auto-rebase"
+          fi
+
+  load-config:
+    runs-on: ubuntu-latest
+    outputs:
+      pr_branches: ${{ steps.config.outputs.pr_branches }}
+      cherry_picks: ${{ steps.config.outputs.cherry_picks }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read fork config
+        id: config
+        run: |
+          echo "pr_branches=$(jq -c '.pr_branches' .github/fork-config.json)" >> "$GITHUB_OUTPUT"
+          echo "cherry_picks=$(jq -c '.cherry_picks' .github/fork-config.json)" >> "$GITHUB_OUTPUT"
+
+  cherry-pick-tracker:
+    runs-on: ubuntu-latest
+    needs: load-config
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check cherry-picked PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHERRY_PICKS: ${{ needs.load-config.outputs.cherry_picks }}
+        run: |
+          echo "$CHERRY_PICKS" | jq -c '.[]' | while read -r entry; do
+            pr=$(echo "$entry" | jq -r '.pr')
+            desc=$(echo "$entry" | jq -r '.description')
+
+            state=$(gh pr view "$pr" --repo openclaw/openclaw --json state,mergedAt --jq '.state')
+            merged_at=$(gh pr view "$pr" --repo openclaw/openclaw --json mergedAt --jq '.mergedAt')
+
+            TITLE="Cherry-pick PR #${pr}: ${desc}"
+
+            # Skip if we already have a closed issue for this
+            closed=$(gh issue list --label "cherry-pick" --state closed --search "$TITLE" --json number --jq '.[0].number')
+            if [ -n "$closed" ]; then
+              echo "Skipping PR #$pr — already has closed issue #$closed"
+              continue
+            fi
+
+            existing=$(gh issue list --label "cherry-pick" --state open --search "$TITLE" --json number --jq '.[0].number')
+
+            if [ "$state" = "MERGED" ]; then
+              BODY="Upstream PR #${pr} (**${desc}**) has been merged (${merged_at}).
+
+          Our cherry-pick of this PR can now be removed — the changes are in \`upstream/main\`.
+
+          _Detected: $(date -u '+%Y-%m-%d %H:%M UTC')_"
+
+              if [ -n "$existing" ]; then
+                gh issue edit "$existing" --body "$BODY"
+              else
+                gh issue create --title "$TITLE — merged upstream" --body "$BODY" --label "fork-maintenance,cherry-pick"
+              fi
+
+            elif [ "$state" = "CLOSED" ]; then
+              BODY="⚠️ Upstream PR #${pr} (**${desc}**) was **closed without merge**.
+
+          Review whether our cherry-pick should be kept, adapted, or removed.
+
+          _Detected: $(date -u '+%Y-%m-%d %H:%M UTC')_"
+
+              if [ -n "$existing" ]; then
+                gh issue edit "$existing" --body "$BODY"
+              else
+                gh issue create --title "$TITLE — closed without merge" --body "$BODY" --label "fork-maintenance,cherry-pick"
+              fi
+
+            else
+              echo "PR #$pr is still open — no action needed"
+            fi
+          done
+
+  upstream-drift:
+    runs-on: ubuntu-latest
+    needs: load-config
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/openclaw/openclaw.git || true
+          git fetch upstream main
+
+      - name: Check drift for each branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_BRANCHES: ${{ needs.load-config.outputs.pr_branches }}
+        run: |
+          echo "$PR_BRANCHES" | jq -r '.[]' | while read -r branch; do
+            git fetch origin "$branch" 2>/dev/null || continue
+
+            ahead=$(git rev-list --count "origin/${branch}..upstream/main")
+            echo "Branch $branch is $ahead commits behind upstream/main"
+
+            TITLE="Upstream drift: ${branch} (${ahead} commits behind)"
+
+            if [ "$ahead" -gt 50 ]; then
+              BODY="Branch \`${branch}\` is **${ahead} commits** behind \`upstream/main\`.
+
+          Consider rebasing to reduce drift and potential conflicts.
+
+          _Updated: $(date -u '+%Y-%m-%d %H:%M UTC')_"
+
+              # Close stale drift issues with different counts
+              gh issue list --label "fork-maintenance" --state open --search "Upstream drift: ${branch}" --json number,title --jq '.[] | .number' | while read -r num; do
+                gh issue close "$num" --comment "Superseded by updated drift report."
+              done
+
+              gh issue create --title "$TITLE" --body "$BODY" --label "fork-maintenance"
+            else
+              # Close any existing drift issues if we're back under threshold
+              gh issue list --label "fork-maintenance" --state open --search "Upstream drift: ${branch}" --json number --jq '.[].number' | while read -r num; do
+                gh issue close "$num" --comment "Drift is now ${ahead} commits — below threshold."
+              done
+            fi
+          done
