@@ -38,6 +38,9 @@ const { computeBackoff, sleepWithAbort } = vi.hoisted(() => ({
   computeBackoff: vi.fn(() => 0),
   sleepWithAbort: vi.fn(async () => undefined),
 }));
+const { startTelegramWebhookSpy } = vi.hoisted(() => ({
+  startTelegramWebhookSpy: vi.fn(async () => ({ server: { close: vi.fn() }, stop: vi.fn() })),
+}));
 
 vi.mock("../config/config.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../config/config.js")>();
@@ -83,6 +86,10 @@ vi.mock("../infra/backoff.js", () => ({
   sleepWithAbort,
 }));
 
+vi.mock("./webhook.js", () => ({
+  startTelegramWebhook: (...args: unknown[]) => startTelegramWebhookSpy(...args),
+}));
+
 vi.mock("../auto-reply/reply.js", () => ({
   getReplyFromConfig: async (ctx: { Body?: string }) => ({
     text: `echo:${ctx.Body}`,
@@ -107,6 +114,7 @@ describe("monitorTelegramProvider (grammY)", () => {
     sleepWithAbort.mockClear();
     // Reset instance states between tests
     __resetInstanceStates();
+    startTelegramWebhookSpy.mockClear();
   });
 
   it("processes a DM and sends reply", async () => {
@@ -313,5 +321,29 @@ describe("monitorTelegramProvider (grammY)", () => {
     } finally {
       vi.spyOn(Date, "now").mockRestore();
     }
+  });
+
+  it("passes configured webhookHost to webhook listener", async () => {
+    await monitorTelegramProvider({
+      token: "tok",
+      useWebhook: true,
+      webhookUrl: "https://example.test/telegram",
+      webhookSecret: "secret",
+      config: {
+        agents: { defaults: { maxConcurrent: 2 } },
+        channels: {
+          telegram: {
+            webhookHost: "0.0.0.0",
+          },
+        },
+      },
+    });
+
+    expect(startTelegramWebhookSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: "0.0.0.0",
+      }),
+    );
+    expect(runSpy).not.toHaveBeenCalled();
   });
 });
