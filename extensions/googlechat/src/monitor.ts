@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { OpenClawConfig } from "openclaw/plugin-sdk";
 import {
   GROUP_POLICY_BLOCKED_LABEL,
+  createInboundEnvelopeBuilder,
   createScopedPairingAccess,
   createReplyPrefixOptions,
   readJsonBodyWithLimit,
@@ -18,6 +19,14 @@ import {
   resolveMentionGatingWithBypass,
   resolveDmGroupAccessWithLists,
 } from "openclaw/plugin-sdk";
+import type {
+  GoogleChatAnnotation,
+  GoogleChatAttachment,
+  GoogleChatEvent,
+  GoogleChatSpace,
+  GoogleChatMessage,
+  GoogleChatUser,
+} from "./types.js";
 import { type ResolvedGoogleChatAccount } from "./accounts.js";
 import {
   downloadGoogleChatMedia,
@@ -27,14 +36,6 @@ import {
 } from "./api.js";
 import { verifyGoogleChatRequest, type GoogleChatAudienceType } from "./auth.js";
 import { getGoogleChatRuntime } from "./runtime.js";
-import type {
-  GoogleChatAnnotation,
-  GoogleChatAttachment,
-  GoogleChatEvent,
-  GoogleChatSpace,
-  GoogleChatMessage,
-  GoogleChatUser,
-} from "./types.js";
 
 export type GoogleChatRuntimeEnv = {
   log?: (message: string) => void;
@@ -646,6 +647,15 @@ async function processMessageWithPipeline(params: {
       id: spaceId,
     },
   });
+  const buildEnvelope = createInboundEnvelopeBuilder({
+    cfg: config,
+    route,
+    sessionStore: config.session?.store,
+    resolveStorePath: core.channel.session.resolveStorePath,
+    readSessionUpdatedAt: core.channel.session.readSessionUpdatedAt,
+    resolveEnvelopeFormatOptions: core.channel.reply.resolveEnvelopeFormatOptions,
+    formatAgentEnvelope: core.channel.reply.formatAgentEnvelope,
+  });
 
   let mediaPath: string | undefined;
   let mediaType: string | undefined;
@@ -661,20 +671,10 @@ async function processMessageWithPipeline(params: {
   const fromLabel = isGroup
     ? space.displayName || `space:${spaceId}`
     : senderName || `user:${senderId}`;
-  const storePath = core.channel.session.resolveStorePath(config.session?.store, {
-    agentId: route.agentId,
-  });
-  const envelopeOptions = core.channel.reply.resolveEnvelopeFormatOptions(config);
-  const previousTimestamp = core.channel.session.readSessionUpdatedAt({
-    storePath,
-    sessionKey: route.sessionKey,
-  });
-  const body = core.channel.reply.formatAgentEnvelope({
+  const { storePath, body } = buildEnvelope({
     channel: "Google Chat",
     from: fromLabel,
     timestamp: event.eventTime ? Date.parse(event.eventTime) : undefined,
-    previousTimestamp,
-    envelope: envelopeOptions,
     body: rawBody,
   });
 

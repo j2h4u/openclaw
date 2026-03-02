@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { AuthRateLimiter } from "../auth-rate-limit.js";
+import type { GatewayWsClient } from "./ws-types.js";
 import { A2UI_PATH, CANVAS_HOST_PATH, CANVAS_WS_PATH } from "../../canvas-host/a2ui.js";
 import { safeEqualSecret } from "../../security/secret-equal.js";
-import type { AuthRateLimiter } from "../auth-rate-limit.js";
 import {
   authorizeHttpGatewayConnect,
   isLocalDirectRequest,
@@ -9,10 +10,9 @@ import {
   type ResolvedGatewayAuth,
 } from "../auth.js";
 import { CANVAS_CAPABILITY_TTL_MS } from "../canvas-capability.js";
-import { sendGatewayAuthFailure } from "../http-common.js";
+import { authorizeGatewayBearerRequestOrReply } from "../http-auth-helpers.js";
 import { getBearerToken } from "../http-utils.js";
 import { GATEWAY_CLIENT_MODES, normalizeGatewayClientMode } from "../protocol/client-info.js";
-import type { GatewayWsClient } from "./ws-types.js";
 
 export function isCanvasPath(pathname: string): boolean {
   return (
@@ -113,18 +113,5 @@ export async function enforcePluginRouteGatewayAuth(params: {
   allowRealIpFallback: boolean;
   rateLimiter?: AuthRateLimiter;
 }): Promise<boolean> {
-  const token = getBearerToken(params.req);
-  const authResult = await authorizeHttpGatewayConnect({
-    auth: params.auth,
-    connectAuth: token ? { token, password: token } : null,
-    req: params.req,
-    trustedProxies: params.trustedProxies,
-    allowRealIpFallback: params.allowRealIpFallback,
-    rateLimiter: params.rateLimiter,
-  });
-  if (!authResult.ok) {
-    sendGatewayAuthFailure(params.res, authResult);
-    return false;
-  }
-  return true;
+  return await authorizeGatewayBearerRequestOrReply(params);
 }

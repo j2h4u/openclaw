@@ -1,5 +1,5 @@
-import fs from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import fs from "node:fs";
 import path from "node:path";
 import type { OpenClawConfig } from "../config/config.js";
 import { openBoundaryFileSync } from "../infra/boundary-file-read.js";
@@ -275,13 +275,6 @@ export function handleControlUiHttpRequest(
   if (!urlRaw) {
     return false;
   }
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    res.statusCode = 405;
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    res.end("Method Not Allowed");
-    return true;
-  }
-
   const url = new URL(urlRaw, "http://localhost");
   const basePath = normalizeControlUiBasePath(opts?.basePath);
   const pathname = url.pathname;
@@ -291,6 +284,11 @@ export function handleControlUiHttpRequest(
       applyControlUiSecurityHeaders(res);
       respondNotFound(res);
       return true;
+    }
+    // Keep plugin-owned HTTP routes outside the root-mounted Control UI SPA
+    // fallback so untrusted plugins cannot claim arbitrary UI paths.
+    if (pathname === "/plugins" || pathname.startsWith("/plugins/")) {
+      return false;
     }
     if (pathname === "/api" || pathname.startsWith("/api/")) {
       return false;
@@ -308,6 +306,19 @@ export function handleControlUiHttpRequest(
     if (!pathname.startsWith(`${basePath}/`)) {
       return false;
     }
+  }
+
+  // Method guard must run AFTER path checks so that POST requests to non-UI
+  // paths (channel webhooks etc.) fall through to later handlers.  When no
+  // basePath is configured the SPA catch-all would otherwise 405 every POST.
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    if (!basePath) {
+      return false;
+    }
+    res.statusCode = 405;
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.end("Method Not Allowed");
+    return true;
   }
 
   applyControlUiSecurityHeaders(res);

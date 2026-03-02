@@ -1,4 +1,3 @@
-import { inspect } from "node:util";
 import {
   Client,
   ReadyListener,
@@ -10,16 +9,18 @@ import {
 import { GatewayCloseCodes, type GatewayPlugin } from "@buape/carbon/gateway";
 import { VoicePlugin } from "@buape/carbon/voice";
 import { Routes } from "discord-api-types/v10";
+import { inspect } from "node:util";
+import type { HistoryEntry } from "../../auto-reply/reply/history.js";
+import type { OpenClawConfig, ReplyToMode } from "../../config/config.js";
+import type { DiscordMonitorStatusSink } from "./status.js";
 import { resolveTextChunkLimit } from "../../auto-reply/chunk.js";
 import { listNativeCommandSpecsForConfig } from "../../auto-reply/commands-registry.js";
-import type { HistoryEntry } from "../../auto-reply/reply/history.js";
 import { listSkillCommandsForAgents } from "../../auto-reply/skill-commands.js";
 import {
   isNativeCommandsExplicitlyDisabled,
   resolveNativeCommandsEnabled,
   resolveNativeSkillsEnabled,
 } from "../../config/commands.js";
-import type { OpenClawConfig, ReplyToMode } from "../../config/config.js";
 import { loadConfig } from "../../config/config.js";
 import { isDangerousNameMatchingEnabled } from "../../config/dangerous-name-matching.js";
 import {
@@ -71,7 +72,6 @@ import { resolveDiscordPresenceUpdate } from "./presence.js";
 import { resolveDiscordAllowlistConfig } from "./provider.allowlist.js";
 import { runDiscordGatewayLifecycle } from "./provider.lifecycle.js";
 import { resolveDiscordRestFetch } from "./rest-fetch.js";
-import type { DiscordMonitorStatusSink } from "./status.js";
 import {
   createNoopThreadBindingManager,
   createThreadBindingManager,
@@ -517,6 +517,12 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
     if (voiceEnabled) {
       clientPlugins.push(new VoicePlugin());
     }
+    // Pass eventQueue config to Carbon so the listener timeout can be tuned.
+    // Default listenerTimeout is 120s (Carbon defaults to 30s which is too short for LLM calls).
+    const eventQueueOpts = {
+      listenerTimeout: 120_000,
+      ...discordCfg.eventQueue,
+    };
     const client = new Client(
       {
         baseUrl: "http://localhost",
@@ -525,6 +531,7 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
         publicKey: "a",
         token,
         autoDeploy: false,
+        eventQueue: eventQueueOpts,
       },
       {
         commands,
@@ -542,6 +549,7 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
     const logger = createSubsystemLogger("discord/monitor");
     const guildHistories = new Map<string, HistoryEntry[]>();
     let botUserId: string | undefined;
+    let botUserName: string | undefined;
     let voiceManager: DiscordVoiceManager | null = null;
 
     if (nativeDisabledExplicit) {
@@ -555,6 +563,7 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
     try {
       const botUser = await client.fetchUser("@me");
       botUserId = botUser?.id;
+      botUserName = botUser?.username?.trim() || botUser?.globalName?.trim() || undefined;
     } catch (err) {
       runtime.error?.(danger(`discord: failed to fetch bot identity: ${String(err)}`));
     }
@@ -650,7 +659,9 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
       runtime.log?.("discord: GuildPresences intent enabled — presence listener registered");
     }
 
-    runtime.log?.(`logged in to discord${botUserId ? ` as ${botUserId}` : ""}`);
+    const botIdentity =
+      botUserId && botUserName ? `${botUserId} (${botUserName})` : (botUserId ?? botUserName ?? "");
+    runtime.log?.(`logged in to discord${botIdentity ? ` as ${botIdentity}` : ""}`);
 
     lifecycleStarted = true;
     await runDiscordGatewayLifecycle({

@@ -4,6 +4,7 @@ import { toAcpRuntimeError } from "../acp/runtime/errors.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 
 const log = createSubsystemLogger("commands/agent");
+import type { AgentCommandOpts } from "./agent/types.js";
 import {
   listAgentIds,
   resolveAgentDir,
@@ -77,7 +78,6 @@ import { deliverAgentCommandResult } from "./agent/delivery.js";
 import { resolveAgentRunContext } from "./agent/run-context.js";
 import { updateSessionStoreAfterAgentRun } from "./agent/session-store.js";
 import { resolveSession } from "./agent/session.js";
-import type { AgentCommandOpts } from "./agent/types.js";
 
 type PersistSessionEntryParams = {
   sessionStore: Record<string, SessionEntry>;
@@ -179,24 +179,26 @@ function runAgentAttempt(params: {
   });
   if (isCliProvider(params.providerOverride, params.cfg)) {
     const cliSessionId = getCliSessionId(params.sessionEntry, params.providerOverride);
-    return runCliAgent({
-      sessionId: params.sessionId,
-      sessionKey: params.sessionKey,
-      agentId: params.sessionAgentId,
-      sessionFile: params.sessionFile,
-      workspaceDir: params.workspaceDir,
-      config: params.cfg,
-      prompt: effectivePrompt,
-      provider: params.providerOverride,
-      model: params.modelOverride,
-      thinkLevel: params.resolvedThinkLevel,
-      timeoutMs: params.timeoutMs,
-      runId: params.runId,
-      extraSystemPrompt: params.opts.extraSystemPrompt,
-      cliSessionId,
-      images: params.isFallbackRetry ? undefined : params.opts.images,
-      streamParams: params.opts.streamParams,
-    }).catch(async (err) => {
+    const runCliWithSession = (nextCliSessionId: string | undefined) =>
+      runCliAgent({
+        sessionId: params.sessionId,
+        sessionKey: params.sessionKey,
+        agentId: params.sessionAgentId,
+        sessionFile: params.sessionFile,
+        workspaceDir: params.workspaceDir,
+        config: params.cfg,
+        prompt: effectivePrompt,
+        provider: params.providerOverride,
+        model: params.modelOverride,
+        thinkLevel: params.resolvedThinkLevel,
+        timeoutMs: params.timeoutMs,
+        runId: params.runId,
+        extraSystemPrompt: params.opts.extraSystemPrompt,
+        cliSessionId: nextCliSessionId,
+        images: params.isFallbackRetry ? undefined : params.opts.images,
+        streamParams: params.opts.streamParams,
+      });
+    return runCliWithSession(cliSessionId).catch(async (err) => {
       // Handle CLI session expired error
       if (
         err instanceof FailoverError &&
@@ -237,24 +239,7 @@ function runAgentAttempt(params: {
         }
 
         // Retry with no session ID (will create a new session)
-        return runCliAgent({
-          sessionId: params.sessionId,
-          sessionKey: params.sessionKey,
-          agentId: params.sessionAgentId,
-          sessionFile: params.sessionFile,
-          workspaceDir: params.workspaceDir,
-          config: params.cfg,
-          prompt: effectivePrompt,
-          provider: params.providerOverride,
-          model: params.modelOverride,
-          thinkLevel: params.resolvedThinkLevel,
-          timeoutMs: params.timeoutMs,
-          runId: params.runId,
-          extraSystemPrompt: params.opts.extraSystemPrompt,
-          cliSessionId: undefined, // No session ID to force new session
-          images: params.isFallbackRetry ? undefined : params.opts.images,
-          streamParams: params.opts.streamParams,
-        }).then(async (result) => {
+        return runCliWithSession(undefined).then(async (result) => {
           // Update session store with new CLI session ID if available
           if (
             result.meta.agentMeta?.sessionId &&
@@ -588,11 +573,7 @@ export async function agentCommand(
       });
     }
 
-    let resolvedThinkLevel =
-      thinkOnce ??
-      thinkOverride ??
-      persistedThinking ??
-      (agentCfg?.thinkingDefault as ThinkLevel | undefined);
+    let resolvedThinkLevel = thinkOnce ?? thinkOverride ?? persistedThinking;
     const resolvedVerboseLevel =
       verboseOverride ?? persistedVerbose ?? (agentCfg?.verboseDefault as VerboseLevel | undefined);
 

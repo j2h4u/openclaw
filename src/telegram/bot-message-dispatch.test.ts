@@ -1,5 +1,5 @@
-import path from "node:path";
 import type { Bot } from "grammy";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { STATE_DIR } from "../config/paths.js";
 
@@ -1461,6 +1461,21 @@ describe("dispatchTelegramMessage draft streaming", () => {
     await dispatchWithContext({ context: createContext() });
 
     // Preview contains stale partial text — must be cleaned up
+    expect(draftStream.clear).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips final payload when text is undefined", async () => {
+    const draftStream = createDraftStream(999);
+    createTelegramDraftStream.mockReturnValue(draftStream);
+    dispatchReplyWithBufferedBlockDispatcher.mockImplementation(async ({ dispatcherOptions }) => {
+      await dispatcherOptions.deliver({ text: undefined as unknown as string }, { kind: "final" });
+      return { queuedFinal: true };
+    });
+    deliverReplies.mockResolvedValue({ delivered: true });
+
+    await dispatchWithContext({ context: createContext() });
+
+    expect(deliverReplies).not.toHaveBeenCalled();
     expect(draftStream.clear).toHaveBeenCalledTimes(1);
   });
 

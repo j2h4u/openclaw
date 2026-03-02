@@ -1,3 +1,5 @@
+import type { TlsOptions } from "node:tls";
+import type { WebSocketServer } from "ws";
 import {
   createServer as createHttpServer,
   type Server as HttpServer,
@@ -5,13 +7,12 @@ import {
   type ServerResponse,
 } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
-import type { TlsOptions } from "node:tls";
-import type { WebSocketServer } from "ws";
+import type { CanvasHostHandler } from "../canvas-host/server.js";
+import type { createSubsystemLogger } from "../logging/subsystem.js";
+import type { GatewayWsClient } from "./server/ws-types.js";
 import { resolveAgentAvatar } from "../agents/identity-avatar.js";
 import { CANVAS_WS_PATH, handleA2uiHttpRequest } from "../canvas-host/a2ui.js";
-import type { CanvasHostHandler } from "../canvas-host/server.js";
 import { loadConfig } from "../config/config.js";
-import type { createSubsystemLogger } from "../logging/subsystem.js";
 import { safeEqualSecret } from "../security/secret-equal.js";
 import { handleSlackHttpRequest } from "../slack/http/index.js";
 import {
@@ -54,7 +55,6 @@ import {
   enforcePluginRouteGatewayAuth,
   isCanvasPath,
 } from "./server/http-auth.js";
-import type { GatewayWsClient } from "./server/ws-types.js";
 import { handleToolsInvokeHttpRequest } from "./tools-invoke-http.js";
 
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
@@ -71,6 +71,43 @@ function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.end(JSON.stringify(body));
+}
+
+const GATEWAY_PROBE_STATUS_BY_PATH = new Map<string, "live" | "ready">([
+  ["/health", "live"],
+  ["/healthz", "live"],
+  ["/ready", "ready"],
+  ["/readyz", "ready"],
+]);
+
+function handleGatewayProbeRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requestPath: string,
+): boolean {
+  const status = GATEWAY_PROBE_STATUS_BY_PATH.get(requestPath);
+  if (!status) {
+    return false;
+  }
+
+  const method = (req.method ?? "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD") {
+    res.statusCode = 405;
+    res.setHeader("Allow", "GET, HEAD");
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.end("Method Not Allowed");
+    return true;
+  }
+
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  if (method === "HEAD") {
+    res.end();
+    return true;
+  }
+  res.end(JSON.stringify({ ok: true, status }));
+  return true;
 }
 
 function writeUpgradeAuthFailure(
@@ -471,7 +508,8 @@ export function createGatewayHttpServer(opts: {
           return;
         }
       }
-      // Plugins run last so built-in gateway routes keep precedence on overlapping paths.
+      // Plugins run after built-in gateway routes so core surfaces keep
+      // precedence on overlapping paths.
       if (handlePluginRequest) {
         if ((shouldEnforcePluginGatewayAuth ?? isProtectedPluginRoutePath)(requestPath)) {
           const pluginAuthOk = await enforcePluginRouteGatewayAuth({
@@ -489,6 +527,9 @@ export function createGatewayHttpServer(opts: {
         if (await handlePluginRequest(req, res)) {
           return;
         }
+      }
+      if (handleGatewayProbeRequest(req, res, requestPath)) {
+        return;
       }
 
       res.statusCode = 404;

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { startBrowserBridgeServer, stopBrowserBridgeServer } from "./bridge-server.js";
 import type { ResolvedBrowserConfig } from "./config.js";
+import { startBrowserBridgeServer, stopBrowserBridgeServer } from "./bridge-server.js";
 import {
   DEFAULT_OPENCLAW_BROWSER_COLOR,
   DEFAULT_OPENCLAW_BROWSER_PROFILE_NAME,
@@ -11,6 +11,8 @@ function buildResolvedConfig(): ResolvedBrowserConfig {
     enabled: true,
     evaluateEnabled: false,
     controlPort: 0,
+    cdpPortRangeStart: 18800,
+    cdpPortRangeEnd: 18899,
     cdpProtocol: "http",
     cdpHost: "127.0.0.1",
     cdpIsLoopback: true,

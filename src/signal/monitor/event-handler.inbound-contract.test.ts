@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { expectInboundContextContract } from "../../../test/helpers/inbound-contract.js";
 import type { MsgContext } from "../../auto-reply/templating.js";
+import { expectInboundContextContract } from "../../../test/helpers/inbound-contract.js";
 import { createSignalEventHandler } from "./event-handler.js";
 import {
   createBaseSignalEventHandlerDeps,
@@ -193,6 +193,31 @@ describe("signal createSignalEventHandler inbound contract", () => {
         sourceUuid: ownUuid,
         dataMessage: {
           message: "self message",
+          attachments: [],
+        },
+      }),
+    );
+
+    expect(capture.ctx).toBeUndefined();
+    expect(dispatchInboundMessageMock).not.toHaveBeenCalled();
+  });
+
+  it("drops sync envelopes when syncMessage is present but null", async () => {
+    const handler = createSignalEventHandler(
+      createBaseSignalEventHandlerDeps({
+        cfg: {
+          messages: { inbound: { debounceMs: 0 } },
+          channels: { signal: { dmPolicy: "open", allowFrom: ["*"] } },
+        },
+        historyLimit: 0,
+      }),
+    );
+
+    await handler(
+      createSignalReceiveEvent({
+        syncMessage: null,
+        dataMessage: {
+          message: "replayed sentTranscript envelope",
           attachments: [],
         },
       }),

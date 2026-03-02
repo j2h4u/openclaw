@@ -1,9 +1,9 @@
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import type { OpenClawConfig } from "../../config/config.js";
+import type { FailoverReason } from "./types.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { formatSandboxToolPolicyBlockedMessage } from "../sandbox.js";
 import { stableStringify } from "../stable-stringify.js";
-import type { FailoverReason } from "./types.js";
 
 const log = createSubsystemLogger("errors");
 
@@ -660,6 +660,8 @@ const ERROR_PATTERNS = {
     "key has been revoked",
     "account has been deactivated",
     /could not (?:authenticate|validate).*(?:api[_ ]?key|credentials)/i,
+    "permission_error",
+    "not allowed for this organization",
   ],
   auth: [
     /invalid[_ ]?api[_ ]?key/,

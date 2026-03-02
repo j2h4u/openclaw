@@ -2,8 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { getPairingAdapter } from "../channels/plugins/pairing.js";
 import type { ChannelId, ChannelPairingAdapter } from "../channels/plugins/types.js";
+import { getPairingAdapter } from "../channels/plugins/pairing.js";
 import { resolveOAuthDir, resolveStateDir } from "../config/paths.js";
 import { withFileLock as withPathLock } from "../infra/file-lock.js";
 import { resolveRequiredHomeDir } from "../infra/home-dir.js";
@@ -225,6 +225,10 @@ function shouldIncludeLegacyAllowFromEntries(normalizedAccountId: string): boole
   return !normalizedAccountId || normalizedAccountId === DEFAULT_ACCOUNT_ID;
 }
 
+function resolveAllowFromAccountId(accountId?: string): string {
+  return normalizePairingAccountId(accountId) || DEFAULT_ACCOUNT_ID;
+}
+
 function normalizeId(value: string | number): string {
   return String(value).trim();
 }
@@ -395,10 +399,9 @@ export async function readLegacyChannelAllowFromStore(
 export async function readChannelAllowFromStore(
   channel: PairingChannel,
   env: NodeJS.ProcessEnv = process.env,
-  accountId: string,
+  accountId?: string,
 ): Promise<string[]> {
-  const normalizedAccountId = accountId.trim().toLowerCase();
-  const resolvedAccountId = normalizedAccountId || DEFAULT_ACCOUNT_ID;
+  const resolvedAccountId = resolveAllowFromAccountId(accountId);
 
   if (!shouldIncludeLegacyAllowFromEntries(resolvedAccountId)) {
     return await readNonDefaultAccountAllowFrom({
@@ -427,10 +430,9 @@ export function readLegacyChannelAllowFromStoreSync(
 export function readChannelAllowFromStoreSync(
   channel: PairingChannel,
   env: NodeJS.ProcessEnv = process.env,
-  accountId: string,
+  accountId?: string,
 ): string[] {
-  const normalizedAccountId = accountId.trim().toLowerCase();
-  const resolvedAccountId = normalizedAccountId || DEFAULT_ACCOUNT_ID;
+  const resolvedAccountId = resolveAllowFromAccountId(accountId);
 
   if (!shouldIncludeLegacyAllowFromEntries(resolvedAccountId)) {
     return readNonDefaultAccountAllowFromSync({

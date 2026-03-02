@@ -1,5 +1,5 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const TEST_GATEWAY_TOKEN = "test-gateway-token-1234567890";
@@ -121,6 +121,25 @@ vi.mock("../agents/openclaw-tools.js", () => {
           throw new Error("boom");
         }
         return { ok: true };
+      },
+    },
+    {
+      name: "diffs_compat_test",
+      parameters: {
+        type: "object",
+        properties: {
+          mode: { type: "string" },
+          fileFormat: { type: "string" },
+        },
+        additionalProperties: false,
+      },
+      execute: async (_toolCallId: string, args: unknown) => {
+        const input = (args ?? {}) as Record<string, unknown>;
+        return {
+          ok: true,
+          observedFormat: input.format,
+          observedFileFormat: input.fileFormat,
+        };
       },
     },
   ];
@@ -545,5 +564,26 @@ describe("POST /tools/invoke", () => {
     expect(crashBody.ok).toBe(false);
     expect(crashBody.error?.type).toBe("tool_error");
     expect(crashBody.error?.message).toBe("tool execution failed");
+  });
+
+  it("passes deprecated format alias through invoke payloads even when schema omits it", async () => {
+    cfg = {
+      ...cfg,
+      agents: {
+        list: [{ id: "main", default: true, tools: { allow: ["diffs_compat_test"] } }],
+      },
+    };
+
+    const res = await invokeToolAuthed({
+      tool: "diffs_compat_test",
+      args: { mode: "file", format: "pdf" },
+      sessionKey: "main",
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.result?.observedFormat).toBe("pdf");
+    expect(body.result?.observedFileFormat).toBeUndefined();
   });
 });

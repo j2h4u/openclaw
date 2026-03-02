@@ -1,3 +1,9 @@
+import type {
+  SignalEnvelope,
+  SignalEventHandlerDeps,
+  SignalReactionMessage,
+  SignalReceivePayload,
+} from "./event-handler.types.js";
 import { resolveHumanDelayConfig } from "../../agents/identity.js";
 import { hasControlCommand } from "../../auto-reply/command-detection.js";
 import { dispatchInboundMessage } from "../../auto-reply/dispatch.js";
@@ -45,12 +51,6 @@ import {
 } from "../identity.js";
 import { sendMessageSignal, sendReadReceiptSignal, sendTypingSignal } from "../send.js";
 import { handleSignalDirectMessageAccess, resolveSignalAccessState } from "./access-policy.js";
-import type {
-  SignalEnvelope,
-  SignalEventHandlerDeps,
-  SignalReactionMessage,
-  SignalReceivePayload,
-} from "./event-handler.types.js";
 import { renderSignalMentions } from "./mentions.js";
 export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
   const inboundDebounceMs = resolveInboundDebounceMs({ cfg: deps.cfg, channel: "signal" });
@@ -438,9 +438,11 @@ export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
       return;
     }
 
-    // For non-own sync messages (e.g., messages synced from other devices),
-    // we could process them but for now we skip to be conservative
-    if (envelope.syncMessage) {
+    // Filter all sync messages (sentTranscript, readReceipts, etc.).
+    // signal-cli may set syncMessage to null instead of omitting it, so
+    // check property existence rather than truthiness to avoid replaying
+    // the bot's own sent messages on daemon restart.
+    if ("syncMessage" in envelope) {
       return;
     }
 

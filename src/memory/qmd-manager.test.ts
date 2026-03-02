@@ -1,8 +1,8 @@
+import type { Mock } from "vitest";
 import { EventEmitter } from "node:events";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { Mock } from "vitest";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { logWarnMock, logDebugMock, logInfoMock } = vi.hoisted(() => ({
@@ -131,11 +131,12 @@ describe("QmdMemoryManager", () => {
     logDebugMock.mockClear();
     logInfoMock.mockClear();
     tmpRoot = path.join(fixtureRoot, `case-${fixtureCount++}`);
-    await fs.mkdir(tmpRoot);
     workspaceDir = path.join(tmpRoot, "workspace");
-    await fs.mkdir(workspaceDir);
     stateDir = path.join(tmpRoot, "state");
-    await fs.mkdir(stateDir);
+    await Promise.all([
+      fs.mkdir(workspaceDir, { recursive: true }),
+      fs.mkdir(stateDir, { recursive: true }),
+    ]);
     process.env.OPENCLAW_STATE_DIR = stateDir;
     cfg = {
       agents: {
@@ -152,7 +153,7 @@ describe("QmdMemoryManager", () => {
     } as OpenClawConfig;
   });
 
-  afterEach(async () => {
+  afterEach(() => {
     vi.useRealTimers();
     delete process.env.OPENCLAW_STATE_DIR;
     delete (globalThis as Record<string, unknown>).__openclawMcporterDaemonStart;

@@ -1,10 +1,10 @@
 import { html, nothing } from "lit";
+import type { AppViewState } from "./app-view-state.ts";
 import { parseAgentSessionKey } from "../../../src/routing/session-key.js";
 import { t } from "../i18n/index.ts";
 import { refreshChatAvatar } from "./app-chat.ts";
 import { renderUsageTab } from "./app-render-usage-tab.ts";
 import { renderChatControls, renderTab, renderThemeToggle } from "./app-render.helpers.ts";
-import type { AppViewState } from "./app-view-state.ts";
 import { loadAgentFileContent, loadAgentFiles, saveAgentFile } from "./controllers/agent-files.ts";
 import { loadAgentIdentities, loadAgentIdentity } from "./controllers/agent-identity.ts";
 import { loadAgentSkills } from "./controllers/agent-skills.ts";
@@ -214,6 +214,7 @@ export function renderApp(state: AppViewState) {
     ...jobToSuggestions,
     ...accountToSuggestions,
   ]);
+  const accountSuggestions = uniquePreserveOrder(accountToSuggestions);
   const deliveryToSuggestions =
     state.cronForm.deliveryMode === "webhook"
       ? rawDeliveryToSuggestions.filter((value) => isHttpUrl(value))
@@ -482,6 +483,7 @@ export function renderApp(state: AppViewState) {
                 thinkingSuggestions: CRON_THINKING_SUGGESTIONS,
                 timezoneSuggestions: CRON_TIMEZONE_SUGGESTIONS,
                 deliveryToSuggestions,
+                accountSuggestions,
                 onFormChange: (patch) => {
                   state.cronForm = normalizeCronFormState({ ...state.cronForm, ...patch });
                   state.cronFieldErrors = validateCronForm(state.cronForm);
@@ -492,7 +494,7 @@ export function renderApp(state: AppViewState) {
                 onClone: (job) => startCronClone(state, job),
                 onCancelEdit: () => cancelCronEdit(state),
                 onToggle: (job, enabled) => toggleCronJob(state, job, enabled),
-                onRun: (job) => runCronJob(state, job),
+                onRun: (job, mode) => runCronJob(state, job, mode ?? "force"),
                 onRemove: (job) => removeCronJob(state, job),
                 onLoadRuns: async (jobId) => {
                   updateCronRunsFilter(state, { cronRunsScope: "job" });

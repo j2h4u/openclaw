@@ -1,9 +1,9 @@
+import JSON5 from "json5";
 import fs from "node:fs";
 import path from "node:path";
-import JSON5 from "json5";
+import type { CronStoreFile } from "./types.js";
 import { expandHomePrefix } from "../infra/home-dir.js";
 import { CONFIG_DIR } from "../utils.js";
-import type { CronStoreFile } from "./types.js";
 
 export const DEFAULT_CRON_DIR = path.join(CONFIG_DIR, "cron");
 export const DEFAULT_CRON_STORE_PATH = path.join(DEFAULT_CRON_DIR, "jobs.json");
@@ -71,5 +71,30 @@ export async function saveCronStore(storePath: string, store: CronStoreFile) {
       // best-effort
     }
   }
-  await fs.promises.rename(tmp, storePath);
+  await renameWithRetry(tmp, storePath);
+}
+
+const RENAME_MAX_RETRIES = 3;
+const RENAME_BASE_DELAY_MS = 50;
+
+async function renameWithRetry(src: string, dest: string): Promise<void> {
+  for (let attempt = 0; attempt <= RENAME_MAX_RETRIES; attempt++) {
+    try {
+      await fs.promises.rename(src, dest);
+      return;
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === "EBUSY" && attempt < RENAME_MAX_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, RENAME_BASE_DELAY_MS * 2 ** attempt));
+        continue;
+      }
+      // Windows doesn't reliably support atomic replace via rename when dest exists.
+      if (code === "EPERM" || code === "EEXIST") {
+        await fs.promises.copyFile(src, dest);
+        await fs.promises.unlink(src).catch(() => {});
+        return;
+      }
+      throw err;
+    }
+  }
 }

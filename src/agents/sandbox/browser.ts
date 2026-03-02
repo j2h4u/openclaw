@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import type { SandboxBrowserContext, SandboxConfig } from "./types.js";
 import { startBrowserBridgeServer, stopBrowserBridgeServer } from "../../browser/bridge-server.js";
 import { type ResolvedBrowserConfig, resolveProfile } from "../../browser/config.js";
 import {
@@ -6,6 +7,7 @@ import {
   DEFAULT_OPENCLAW_BROWSER_COLOR,
   DEFAULT_OPENCLAW_BROWSER_PROFILE_NAME,
 } from "../../browser/constants.js";
+import { deriveDefaultBrowserCdpPortRange } from "../../config/port-defaults.js";
 import { defaultRuntime } from "../../runtime.js";
 import { BROWSER_BRIDGES } from "./browser-bridges.js";
 import { computeSandboxBrowserConfigHash } from "./config-hash.js";
@@ -34,7 +36,6 @@ import {
 import { readBrowserRegistry, updateBrowserRegistry } from "./registry.js";
 import { resolveSandboxAgentId, slugifySessionKey } from "./shared.js";
 import { isToolAllowed } from "./tool-policy.js";
-import type { SandboxBrowserContext, SandboxConfig } from "./types.js";
 import { validateNetworkMode } from "./validate-sandbox-security.js";
 
 const HOT_BROWSER_WINDOW_MS = 5 * 60 * 1000;
@@ -70,6 +71,7 @@ function buildSandboxBrowserResolvedConfig(params: {
   evaluateEnabled: boolean;
 }): ResolvedBrowserConfig {
   const cdpHost = "127.0.0.1";
+  const cdpPortRange = deriveDefaultBrowserCdpPortRange(params.controlPort);
   return {
     enabled: true,
     evaluateEnabled: params.evaluateEnabled,
@@ -77,6 +79,8 @@ function buildSandboxBrowserResolvedConfig(params: {
     cdpProtocol: "http",
     cdpHost,
     cdpIsLoopback: true,
+    cdpPortRangeStart: cdpPortRange.start,
+    cdpPortRangeEnd: cdpPortRange.end,
     remoteCdpTimeoutMs: 1500,
     remoteCdpHandshakeTimeoutMs: 3000,
     color: DEFAULT_OPENCLAW_BROWSER_COLOR,

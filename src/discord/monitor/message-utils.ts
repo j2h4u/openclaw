@@ -1,8 +1,8 @@
 import type { ChannelType, Client, Message } from "@buape/carbon";
 import { StickerFormatType, type APIAttachment, type APIStickerItem } from "discord-api-types/v10";
+import type { SsrFPolicy } from "../../infra/net/ssrf.js";
 import { buildMediaPayload } from "../../channels/plugins/media-payload.js";
 import { logVerbose } from "../../globals.js";
-import type { SsrFPolicy } from "../../infra/net/ssrf.js";
 import { fetchRemoteMedia, type FetchLike } from "../../media/fetch.js";
 import { saveMediaBuffer } from "../../media/store.js";
 
@@ -250,6 +250,12 @@ async function appendResolvedMediaFromAttachments(params: {
     } catch (err) {
       const id = attachment.id ?? attachment.url;
       logVerbose(`${params.errorPrefix} ${id}: ${String(err)}`);
+      // Preserve attachment context even when remote fetch is blocked/fails.
+      params.out.push({
+        path: attachment.url,
+        contentType: attachment.content_type,
+        placeholder: inferPlaceholder(attachment),
+      });
     }
   }
 }
@@ -306,6 +312,19 @@ function formatStickerError(err: unknown): string {
   }
 }
 
+function inferStickerContentType(sticker: APIStickerItem): string | undefined {
+  switch (sticker.format_type) {
+    case StickerFormatType.GIF:
+      return "image/gif";
+    case StickerFormatType.APNG:
+    case StickerFormatType.Lottie:
+    case StickerFormatType.PNG:
+      return "image/png";
+    default:
+      return undefined;
+  }
+}
+
 async function appendResolvedMediaFromStickers(params: {
   stickers?: APIStickerItem[] | null;
   maxBytes: number;
@@ -348,6 +367,14 @@ async function appendResolvedMediaFromStickers(params: {
     }
     if (lastError) {
       logVerbose(`${params.errorPrefix} ${sticker.id}: ${formatStickerError(lastError)}`);
+      const fallback = candidates[0];
+      if (fallback) {
+        params.out.push({
+          path: fallback.url,
+          contentType: inferStickerContentType(sticker),
+          placeholder: "<media:sticker>",
+        });
+      }
     }
   }
 }

@@ -1,3 +1,7 @@
+import type { CliDeps } from "../../cli/outbound-send-deps.js";
+import type { OpenClawConfig } from "../../config/config.js";
+import type { AgentDefaultsConfig } from "../../config/types.js";
+import type { CronJob, CronRunOutcome, CronRunTelemetry } from "../types.js";
 import {
   resolveAgentConfig,
   resolveAgentDir,
@@ -31,14 +35,11 @@ import {
   normalizeVerboseLevel,
   supportsXHighThinking,
 } from "../../auto-reply/thinking.js";
-import type { CliDeps } from "../../cli/outbound-send-deps.js";
-import type { OpenClawConfig } from "../../config/config.js";
 import {
   resolveSessionTranscriptPath,
   setSessionRuntimeModel,
   updateSessionStore,
 } from "../../config/sessions.js";
-import type { AgentDefaultsConfig } from "../../config/types.js";
 import { registerAgentRunContext } from "../../infra/agent-events.js";
 import { logWarn } from "../../logger.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
@@ -49,7 +50,6 @@ import {
   isExternalHookSession,
 } from "../../security/external-content.js";
 import { resolveCronDeliveryPlan } from "../delivery.js";
-import type { CronJob, CronRunOutcome, CronRunTelemetry } from "../types.js";
 import {
   dispatchCronDelivery,
   matchesMessagingToolDeliveryTarget,
@@ -299,16 +299,15 @@ export async function runCronIsolatedAgentTurn(params: {
     }
   }
 
-  // Resolve thinking level - job thinking > hooks.gmail.thinking > agent default
+  // Resolve thinking level - job thinking > hooks.gmail.thinking > model/global defaults
   const hooksGmailThinking = isGmailHook
     ? normalizeThinkLevel(params.cfg.hooks?.gmail?.thinking)
     : undefined;
-  const thinkOverride = normalizeThinkLevel(agentCfg?.thinkingDefault);
   const jobThink = normalizeThinkLevel(
     (params.job.payload.kind === "agentTurn" ? params.job.payload.thinking : undefined) ??
       undefined,
   );
-  let thinkLevel = jobThink ?? hooksGmailThinking ?? thinkOverride;
+  let thinkLevel = jobThink ?? hooksGmailThinking;
   if (!thinkLevel) {
     thinkLevel = resolveThinkingDefault({
       cfg: cfgWithAgentDefaults,
@@ -507,6 +506,8 @@ export async function runCronIsolatedAgentTurn(params: {
           thinkLevel,
           verboseLevel: resolvedVerboseLevel,
           timeoutMs,
+          bootstrapContextMode: agentPayload?.lightContext ? "lightweight" : undefined,
+          bootstrapContextRunKind: "cron",
           runId: cronSession.sessionEntry.sessionId,
           // Only enforce an explicit message target when the cron delivery target
           // was successfully resolved. When resolution fails the agent should not
