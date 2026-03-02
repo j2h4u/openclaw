@@ -1,0 +1,12 @@
+{
+  "pr_branches": [
+    "fix/validate-json-after-write",
+    "fix/improve-provider-auth-error-message",
+    "fix/isolated-session-agentdir",
+    "fix/failover-proxy-auth-errors"
+  ],
+  "cherry_picks": [
+    { "pr": 8166, "description": "lifecycle fixes for duplicate messages" },
+    { "pr": 13501, "description": "text dedup across message boundaries" }
+  ]
+}
