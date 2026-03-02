@@ -6,18 +6,21 @@
  * Provides seamless auto-recall and auto-capture via lifecycle hooks.
  */
 
-import { randomUUID } from "node:crypto";
 import type * as LanceDB from "@lancedb/lancedb";
-import { Type } from "@sinclair/typebox";
-import OpenAI from "openai";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import { Type } from "@sinclair/typebox";
+import { randomUUID } from "node:crypto";
+import OpenAI from "openai";
 import {
   DEFAULT_CAPTURE_MAX_CHARS,
   MEMORY_CATEGORIES,
   type MemoryCategory,
+  type MemoryConfig,
   memoryConfigSchema,
   vectorDimsForModel,
 } from "./config.js";
+import { stripMessageMetadata, parseEnvelopeMetadata } from "./message-utils.js";
+import { matchTrigger, type TriggerCategory } from "./triggers.js";
 
 // ============================================================================
 // Types
@@ -43,6 +46,10 @@ type MemoryEntry = {
   importance: number;
   category: MemoryCategory;
   createdAt: number;
+  // Optional metadata (may be missing in older entries)
+  username?: string;
+  channel?: string;
+  chatId?: string;
 };
 
 type MemorySearchResult = {
@@ -56,6 +63,15 @@ type MemorySearchResult = {
 
 const TABLE_NAME = "memories";
 
+// Timeout for LanceDB operations (60 seconds) - prevents Event Loop blocking
+const LANCEDB_TIMEOUT_MS = 60_000;
+
+type Logger = {
+  debug?: (msg: string) => void;
+  info: (msg: string) => void;
+  warn: (msg: string) => void;
+};
+
 class MemoryDB {
   private db: LanceDB.Connection | null = null;
   private table: LanceDB.Table | null = null;
@@ -64,6 +80,7 @@ class MemoryDB {
   constructor(
     private readonly dbPath: string,
     private readonly vectorDim: number,
+    private readonly logger?: Logger,
   ) {}
 
   private async ensureInitialized(): Promise<void> {
@@ -109,14 +126,37 @@ class MemoryDB {
       createdAt: Date.now(),
     };
 
+    const startMs = Date.now();
+    this.logger?.debug?.(`memory-lancedb: [db.store] starting`);
+
     await this.table!.add([fullEntry]);
+
+    const elapsed = Date.now() - startMs;
+    if (elapsed > 1000) {
+      this.logger?.warn(`memory-lancedb: [db.store] slow write: ${elapsed}ms`);
+    } else {
+      this.logger?.debug?.(`memory-lancedb: [db.store] completed in ${elapsed}ms`);
+    }
+
     return fullEntry;
   }
 
   async search(vector: number[], limit = 5, minScore = 0.5): Promise<MemorySearchResult[]> {
     await this.ensureInitialized();
 
-    const results = await this.table!.vectorSearch(vector).limit(limit).toArray();
+    const startMs = Date.now();
+    this.logger?.debug?.(`memory-lancedb: [db.search] starting (limit=${limit})`);
+
+    const results = await this.table!.vectorSearch(vector)
+      .limit(limit)
+      .toArray({ timeoutMs: LANCEDB_TIMEOUT_MS });
+
+    const elapsed = Date.now() - startMs;
+    if (elapsed > 1000) {
+      this.logger?.warn(`memory-lancedb: [db.search] slow query: ${elapsed}ms`);
+    } else {
+      this.logger?.debug?.(`memory-lancedb: [db.search] completed in ${elapsed}ms`);
+    }
 
     // LanceDB uses L2 distance by default; convert to similarity score
     const mapped = results.map((row) => {
@@ -131,6 +171,9 @@ class MemoryDB {
           importance: row.importance as number,
           category: row.category as MemoryEntry["category"],
           createdAt: row.createdAt as number,
+          username: row.username as string | undefined,
+          channel: row.channel as string | undefined,
+          chatId: row.chatId as string | undefined,
         },
         score,
       };
@@ -154,13 +197,89 @@ class MemoryDB {
     await this.ensureInitialized();
     return this.table!.countRows();
   }
+
+  async list(opts: { limit?: number; offset?: number } = {}): Promise<MemoryEntry[]> {
+    await this.ensureInitialized();
+    const limit = opts.limit ?? 20;
+    const offset = opts.offset ?? 0;
+
+    // LanceDB query with limit/offset
+    let query = this.table!.query().limit(limit);
+    if (offset > 0) {
+      // LanceDB doesn't have native offset, use filter workaround
+      // Sort by createdAt DESC and skip manually
+      const allRows = await this.table!.query().toArray();
+      const sorted = allRows.sort((a, b) => (b.createdAt as number) - (a.createdAt as number));
+      const sliced = sorted.slice(offset, offset + limit);
+      return sliced.map((row) => ({
+        id: row.id as string,
+        text: row.text as string,
+        vector: row.vector as number[],
+        importance: row.importance as number,
+        category: row.category as MemoryEntry["category"],
+        createdAt: row.createdAt as number,
+        username: row.username as string | undefined,
+        channel: row.channel as string | undefined,
+        chatId: row.chatId as string | undefined,
+      }));
+    }
+
+    const results = await query.toArray();
+    // Sort by createdAt DESC (newest first)
+    results.sort((a, b) => (b.createdAt as number) - (a.createdAt as number));
+
+    return results.map((row) => ({
+      id: row.id as string,
+      text: row.text as string,
+      vector: row.vector as number[],
+      importance: row.importance as number,
+      category: row.category as MemoryEntry["category"],
+      createdAt: row.createdAt as number,
+      username: row.username as string | undefined,
+      channel: row.channel as string | undefined,
+      chatId: row.chatId as string | undefined,
+    }));
+  }
 }
 
 // ============================================================================
-// OpenAI Embeddings
+// Embedding Providers
 // ============================================================================
 
-class Embeddings {
+interface EmbeddingProvider {
+  embed(text: string): Promise<number[]>;
+}
+
+// Timing wrapper for embedding providers
+class TimedEmbeddings implements EmbeddingProvider {
+  private firstCall = true;
+
+  constructor(
+    private inner: EmbeddingProvider,
+    private logger: { info: (msg: string) => void },
+    private model: string,
+  ) {}
+
+  async embed(text: string): Promise<number[]> {
+    const start = performance.now();
+    const result = await this.inner.embed(text);
+    const elapsed = performance.now() - start;
+
+    if (this.firstCall) {
+      this.logger.info(
+        `memory-lancedb: first embed (${this.model}): ${elapsed.toFixed(0)}ms (includes model load)`,
+      );
+      this.firstCall = false;
+    } else if (elapsed > 100) {
+      // Only log slow embeds (>100ms) to avoid spam
+      this.logger.info(`memory-lancedb: embed: ${elapsed.toFixed(0)}ms`);
+    }
+
+    return result;
+  }
+}
+
+class OpenAIEmbeddings implements EmbeddingProvider {
   private client: OpenAI;
 
   constructor(
@@ -180,22 +299,10 @@ class Embeddings {
   }
 }
 
-// ============================================================================
-// Rule-based capture filter
-// ============================================================================
+// Lazy-loaded Xenova transformers pipeline
+let pipelinePromise: Promise<unknown> | null = null;
 
-const MEMORY_TRIGGERS = [
-  /zapamatuj si|pamatuj|remember/i,
-  /preferuji|radši|nechci|prefer/i,
-  /rozhodli jsme|budeme používat/i,
-  /\+\d{10,}/,
-  /[\w.-]+@[\w.-]+\.\w+/,
-  /můj\s+\w+\s+je|je\s+můj/i,
-  /my\s+\w+\s+is|is\s+my/i,
-  /i (like|prefer|hate|love|want|need)/i,
-  /always|never|important/i,
-];
-
+// Prompt injection protection (upstream)
 const PROMPT_INJECTION_PATTERNS = [
   /ignore (all|any|previous|above|prior) instructions/i,
   /do not follow (the )?(system|developer)/i,
@@ -239,10 +346,6 @@ export function shouldCapture(text: string, options?: { maxChars?: number }): bo
   if (text.length < 10 || text.length > maxChars) {
     return false;
   }
-  // Skip injected context from memory recall
-  if (text.includes("<relevant-memories>")) {
-    return false;
-  }
   // Skip system-generated content
   if (text.startsWith("<") && text.includes("</")) {
     return false;
@@ -263,21 +366,131 @@ export function shouldCapture(text: string, options?: { maxChars?: number }): bo
   return MEMORY_TRIGGERS.some((r) => r.test(text));
 }
 
-export function detectCategory(text: string): MemoryCategory {
-  const lower = text.toLowerCase();
-  if (/prefer|radši|like|love|hate|want/i.test(lower)) {
-    return "preference";
+class LocalEmbeddings implements EmbeddingProvider {
+  constructor(private model: string) {}
+
+  private async getPipeline() {
+    if (!pipelinePromise) {
+      pipelinePromise = (async () => {
+        // Dynamic import to avoid loading transformers until needed
+        const { pipeline } = await import("@xenova/transformers");
+        return pipeline("feature-extraction", this.model);
+      })();
+    }
+    return pipelinePromise;
   }
-  if (/rozhodli|decided|will use|budeme/i.test(lower)) {
-    return "decision";
+
+  async embed(text: string): Promise<number[]> {
+    const extractor = (await this.getPipeline()) as (
+      text: string,
+      options: { pooling: string; normalize: boolean },
+    ) => Promise<{ data: Float32Array }>;
+
+    const output = await extractor(text, {
+      pooling: "mean",
+      normalize: true,
+    });
+
+    return Array.from(output.data);
   }
-  if (/\+\d{10,}|@[\w.-]+\.\w+|is called|jmenuje se/i.test(lower)) {
-    return "entity";
+}
+
+function createEmbeddingProvider(
+  cfg: import("./config.js").MemoryConfig["embedding"],
+): EmbeddingProvider {
+  if (cfg.provider === "local") {
+    return new LocalEmbeddings(cfg.model ?? "Xenova/all-MiniLM-L6-v2");
   }
-  if (/is|are|has|have|je|má|jsou/i.test(lower)) {
-    return "fact";
-  }
-  return "other";
+  return new OpenAIEmbeddings(cfg.apiKey, cfg.model ?? "text-embedding-3-small", cfg.baseUrl);
+}
+
+// ============================================================================
+// Rule-based capture filter (patterns in triggers.ts)
+// ============================================================================
+
+const TRIGGER_TO_CATEGORY: Record<TriggerCategory, MemoryCategory> = {
+  remember: "other",
+  preference: "preference",
+  decision: "decision",
+  identity: "entity",
+  fact: "fact",
+  importance: "other",
+};
+
+// Factory functions that accept language filter (called from register())
+// infoLog is passed separately for temporary diagnostics (TEMP)
+function createShouldCapture(
+  language: MemoryConfig["language"],
+  maxChars: number,
+  debug: (msg: string) => void,
+  infoLog: (msg: string) => void,
+) {
+  return function shouldCapture(text: string): boolean {
+    const cleanText = stripMessageMetadata(text);
+
+    // If original had memories tag, log and use clean version
+    if (cleanText !== text) {
+      debug(`[capture] Stripped memories tag, clean text: "${cleanText.slice(0, 60)}..."`);
+      infoLog(`[shouldCapture] Stripped memories tag, evaluating clean text`); // TEMP
+    }
+
+    const preview = cleanText.length > 60 ? cleanText.slice(0, 60) + "..." : cleanText;
+
+    if (cleanText.length < 10) {
+      debug(`[capture] SKIP (too short: ${cleanText.length} chars): "${preview}"`);
+      infoLog(`[shouldCapture] SKIP (too short: ${cleanText.length}): "${preview}"`); // TEMP
+      return false;
+    }
+    if (cleanText.length > maxChars) {
+      debug(`[capture] SKIP (too long: ${cleanText.length} chars, max: ${maxChars}): "${preview}"`);
+      infoLog(`[shouldCapture] SKIP (too long: ${cleanText.length}): "${preview}"`); // TEMP
+      return false;
+    }
+    // Skip system-generated content (but not if it was just memories that we stripped)
+    if (cleanText.startsWith("<") && cleanText.includes("</")) {
+      debug(`[capture] SKIP (system content): "${preview}"`);
+      infoLog(`[shouldCapture] SKIP (system content): "${preview}"`); // TEMP
+      return false;
+    }
+    // Skip agent summary responses (contain markdown formatting)
+    if (cleanText.includes("**") && cleanText.includes("\n-")) {
+      debug(`[capture] SKIP (markdown response): "${preview}"`);
+      infoLog(`[shouldCapture] SKIP (markdown): "${preview}"`); // TEMP
+      return false;
+    }
+    // Skip emoji-heavy responses (likely agent output)
+    const emojiCount = (cleanText.match(/[\u{1F300}-\u{1F9FF}]/gu) || []).length;
+    if (emojiCount > 3) {
+      debug(`[capture] SKIP (emoji-heavy: ${emojiCount}): "${preview}"`);
+      infoLog(`[shouldCapture] SKIP (emoji ${emojiCount}): "${preview}"`); // TEMP
+      return false;
+    }
+
+    const match = matchTrigger(cleanText, language);
+    if (match) {
+      debug(
+        `[capture] MATCH trigger "${match.category}" (lang: ${match.lang}, weight: ${match.weight}): "${preview}"`,
+      );
+      infoLog(`[shouldCapture] MATCH ${match.category}/${match.lang}: "${preview}"`); // TEMP
+      return true;
+    }
+
+    debug(
+      `[capture] SKIP (no trigger matched, lang filter: ${JSON.stringify(language)}): "${preview}"`,
+    );
+    infoLog(`[shouldCapture] SKIP (no trigger, lang=${JSON.stringify(language)}): "${preview}"`); // TEMP
+    return false;
+  };
+}
+
+function createDetectCategory(language: MemoryConfig["language"]) {
+  return function detectCategory(text: string): MemoryCategory {
+    const match = matchTrigger(text, language);
+    if (match) {
+      return TRIGGER_TO_CATEGORY[match.category];
+    }
+    return "other";
+  };
 }
 
 // ============================================================================
@@ -294,13 +507,35 @@ const memoryPlugin = {
   register(api: OpenClawPluginApi) {
     const cfg = memoryConfigSchema.parse(api.pluginConfig);
     const resolvedDbPath = api.resolvePath(cfg.dbPath!);
-    const { model, dimensions, apiKey, baseUrl } = cfg.embedding;
+    const defaultModel =
+      cfg.embedding.provider === "local" ? "Xenova/all-MiniLM-L6-v2" : "text-embedding-3-small";
+    const vectorDim = vectorDimsForModel(cfg.embedding.model ?? defaultModel);
 
-    const vectorDim = dimensions ?? vectorDimsForModel(model);
-    const db = new MemoryDB(resolvedDbPath, vectorDim);
-    const embeddings = new Embeddings(apiKey, model, baseUrl);
+    // Debug logger for capture analysis (visible in gateway logs)
+    const debug = (msg: string) => api.logger.debug?.(`memory-lancedb: ${msg}`);
+    // TEMP: info-level logging for auto-capture diagnostics
+    const infoLog = (msg: string) => api.logger.info(`memory-lancedb: ${msg}`);
 
-    api.logger.info(`memory-lancedb: plugin registered (db: ${resolvedDbPath}, lazy init)`);
+    // Create capture functions with language filter from config
+    const shouldCapture = createShouldCapture(cfg.language, cfg.captureMaxChars, debug, infoLog);
+    const detectCategory = createDetectCategory(cfg.language);
+    const db = new MemoryDB(resolvedDbPath, vectorDim, {
+      debug: (msg) => api.logger.debug?.(msg),
+      info: (msg) => api.logger.info(msg),
+      warn: (msg) => api.logger.warn(msg),
+    });
+    const modelName =
+      cfg.embedding.model ??
+      (cfg.embedding.provider === "local" ? "Xenova/all-MiniLM-L6-v2" : "text-embedding-3-small");
+    const embeddings = new TimedEmbeddings(
+      createEmbeddingProvider(cfg.embedding),
+      api.logger,
+      modelName,
+    );
+
+    api.logger.info(
+      `memory-lancedb: plugin registered (db: ${resolvedDbPath}, model: ${modelName}, lazy init)`,
+    );
 
     // ========================================================================
     // Tools
@@ -498,10 +733,60 @@ const memoryPlugin = {
 
         memory
           .command("list")
-          .description("List memories")
-          .action(async () => {
+          .description("List all memories with pagination")
+          .option("--limit <n>", "Number of items per page", "20")
+          .option("--offset <n>", "Skip first N items", "0")
+          .option("--json", "Output as JSON")
+          .action(async (opts) => {
+            const limit = parseInt(opts.limit);
+            const offset = parseInt(opts.offset);
             const count = await db.count();
-            console.log(`Total memories: ${count}`);
+            const entries = await db.list({ limit, offset });
+
+            if (opts.json) {
+              console.log(
+                JSON.stringify(
+                  {
+                    total: count,
+                    offset,
+                    limit,
+                    entries: entries.map((e) => ({
+                      id: e.id,
+                      text: e.text,
+                      category: e.category,
+                      importance: e.importance,
+                      createdAt: new Date(e.createdAt).toISOString(),
+                      username: e.username,
+                      channel: e.channel,
+                      chatId: e.chatId,
+                    })),
+                  },
+                  null,
+                  2,
+                ),
+              );
+              return;
+            }
+
+            console.log(
+              `\nMemories (${offset + 1}-${Math.min(offset + entries.length, count)} of ${count}):\n`,
+            );
+            for (const entry of entries) {
+              const date = new Date(entry.createdAt).toLocaleString();
+              const truncatedText =
+                entry.text.length > 100 ? entry.text.slice(0, 100) + "..." : entry.text;
+              // Build metadata line
+              const meta = [entry.username ? `@${entry.username}` : null, entry.channel]
+                .filter(Boolean)
+                .join(" via ");
+              const metaPrefix = meta ? `(${meta}) ` : "";
+              console.log(`[${entry.category}] ${metaPrefix}${truncatedText}`);
+              console.log(`  id: ${entry.id} | importance: ${entry.importance} | ${date}\n`);
+            }
+
+            if (offset + entries.length < count) {
+              console.log(`\nNext page: ltm list --offset ${offset + limit} --limit ${limit}`);
+            }
           });
 
         memory
@@ -574,6 +859,16 @@ const memoryPlugin = {
         }
 
         try {
+          // Debug: log message count and roles
+          const roles = (event.messages as Array<Record<string, unknown>>)
+            .map((m) => m?.role ?? "unknown")
+            .join(", ");
+          debug(`[agent_end] Processing ${event.messages.length} messages, roles: [${roles}]`);
+          // TEMP: info-level diagnostics for auto-capture investigation
+          api.logger.info(
+            `memory-lancedb: [agent_end] ${event.messages.length} messages, roles: [${roles}]`,
+          );
+
           // Extract text content from messages (handling unknown[] type)
           const texts: string[] = [];
           for (const msg of event.messages) {
@@ -614,17 +909,29 @@ const memoryPlugin = {
             }
           }
 
-          // Filter for capturable content
-          const toCapture = texts.filter(
-            (text) => text && shouldCapture(text, { maxChars: cfg.captureMaxChars }),
+          // TEMP: log extracted texts for debugging
+          api.logger.info(
+            `memory-lancedb: [agent_end] extracted ${texts.length} texts: ${texts.map((t) => (t.length > 50 ? t.slice(0, 50) + "..." : t)).join(" | ")}`,
           );
+
+          // Filter for capturable content
+          const toCapture = texts.filter((text) => text && shouldCapture(text));
           if (toCapture.length === 0) {
             return;
           }
 
           // Store each capturable piece (limit to 3 per conversation)
           let stored = 0;
-          for (const text of toCapture.slice(0, 3)) {
+          for (const rawText of toCapture.slice(0, 3)) {
+            // Extract metadata from envelope BEFORE stripping it
+            const metadata = parseEnvelopeMetadata(rawText);
+
+            // Clean the text before storing (remove injected memory context)
+            const text = stripMessageMetadata(rawText);
+            if (!text || text.length < 10) {
+              continue; // Skip if cleaning left nothing meaningful
+            }
+
             const category = detectCategory(text);
             const vector = await embeddings.embed(text);
 
@@ -639,6 +946,9 @@ const memoryPlugin = {
               vector,
               importance: 0.7,
               category,
+              username: metadata.username,
+              channel: metadata.channel,
+              chatId: metadata.chatId,
             });
             stored++;
           }
@@ -659,8 +969,9 @@ const memoryPlugin = {
     api.registerService({
       id: "memory-lancedb",
       start: () => {
+        const model = cfg.embedding.model ?? defaultModel;
         api.logger.info(
-          `memory-lancedb: initialized (db: ${resolvedDbPath}, model: ${cfg.embedding.model})`,
+          `memory-lancedb: initialized (db: ${resolvedDbPath}, provider: ${cfg.embedding.provider}, model: ${model})`,
         );
       },
       stop: () => {
