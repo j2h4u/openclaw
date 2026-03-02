@@ -22,3 +22,6 @@ services:
       - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
     tmpfs:
       - /home/node:size=512M,uid=1000,gid=1000
+    depends_on:
+      openclaw-gateway:
+        condition: service_healthy
