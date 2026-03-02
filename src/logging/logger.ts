@@ -2,9 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { Logger as TsLogger } from "tslog";
 import type { OpenClawConfig } from "../config/types.js";
+import type { ConsoleStyle } from "./console.js";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
 import { readLoggingConfig } from "./config.js";
-import type { ConsoleStyle } from "./console.js";
 import { resolveEnvLogLevelOverride } from "./env-log-level.js";
 import { type LogLevel, levelToMinLevel, normalizeLogLevel } from "./levels.js";
 import { resolveNodeRequireFromMeta } from "./node-require.js";
@@ -15,7 +15,7 @@ export const DEFAULT_LOG_FILE = path.join(DEFAULT_LOG_DIR, "openclaw.log"); // l
 
 const LOG_PREFIX = "openclaw";
 const LOG_SUFFIX = ".log";
-const MAX_LOG_AGE_MS = 24 * 60 * 60 * 1000; // 24h
+const MAX_LOG_AGE_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 const DEFAULT_MAX_LOG_FILE_BYTES = 500 * 1024 * 1024; // 500 MB
 
 const requireConfig = resolveNodeRequireFromMeta(import.meta.url);

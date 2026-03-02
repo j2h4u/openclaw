@@ -1,11 +1,11 @@
 import { createHmac, createHash } from "node:crypto";
 import type { ReasoningLevel, ThinkLevel } from "../auto-reply/thinking.js";
-import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import type { MemoryCitationsMode } from "../config/types.memory.js";
-import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 import type { ResolvedTimeFormat } from "./date-time.js";
 import type { EmbeddedContextFile } from "./pi-embedded-helpers.js";
 import type { EmbeddedSandboxInfo } from "./pi-embedded-runner/types.js";
+import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
+import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 import { sanitizeForPromptLiteral } from "./sanitize-for-prompt.js";
 
 /**
@@ -577,6 +577,8 @@ export function buildAgentSystemPrompt(params: {
   }
   if (params.reactionGuidance) {
     const { level, channel } = params.reactionGuidance;
+    const incomingReactionsText =
+      "\n**Incoming:** User reactions appear as `System: ... reaction added: <emoji> ...`. Acknowledge naturally, don't announce them.";
     const guidanceText =
       level === "minimal"
         ? [
@@ -586,6 +588,7 @@ export function buildAgentSystemPrompt(params: {
             "- Express genuine sentiment (humor, appreciation) sparingly",
             "- Avoid reacting to routine messages or your own replies",
             "Guideline: at most 1 reaction per 5-10 exchanges.",
+            incomingReactionsText,
           ].join("\n")
         : [
             `Reactions are enabled for ${channel} in EXTENSIVE mode.`,
@@ -595,6 +598,7 @@ export function buildAgentSystemPrompt(params: {
             "- React to interesting content, humor, or notable events",
             "- Use reactions to confirm understanding or agreement",
             "Guideline: react whenever it feels natural.",
+            incomingReactionsText,
           ].join("\n");
     lines.push("## Reactions", guidanceText, "");
   }
