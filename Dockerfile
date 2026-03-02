@@ -9,6 +9,12 @@ RUN corepack enable
 WORKDIR /app
 RUN chown node:node /app
 
+# Install ripgrep (required by Grep tool for file content search)
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ripgrep && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
+
 ARG OPENCLAW_DOCKER_APT_PACKAGES=""
 RUN if [ -n "$OPENCLAW_DOCKER_APT_PACKAGES" ]; then \
       apt-get update && \
@@ -63,6 +69,19 @@ RUN pnpm ui:build
 USER root
 RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw \
  && chmod 755 /app/openclaw.mjs
+
+# Install OTel plugin dependencies (pure JS, no native bindings, read-only at runtime)
+RUN --mount=type=cache,target=/root/.npm \
+    cd extensions/diagnostics-otel && \
+    node -e "const p=require('./package.json'); delete p.devDependencies; require('fs').writeFileSync('./package.json', JSON.stringify(p, null, 2))" && \
+    npm install
+
+# Install memory-lancedb plugin dependencies.
+# Skip @xenova/transformers (~1GB): we use remote embeddings (TEI server), not local models.
+RUN --mount=type=cache,target=/root/.npm \
+    cd extensions/memory-lancedb && \
+    node -e "const p=require('./package.json'); delete p.devDependencies; delete p.dependencies['@xenova/transformers']; require('fs').writeFileSync('./package.json', JSON.stringify(p, null, 2))" && \
+    npm install
 
 ENV NODE_ENV=production
 
