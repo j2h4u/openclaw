@@ -1,11 +1,11 @@
 import type { TypingCallbacks } from "../../channels/typing.js";
 import type { HumanDelayConfig } from "../../config/types.js";
-import { sleep } from "../../utils.js";
 import type { GetReplyOptions, ReplyPayload } from "../types.js";
-import { registerDispatcher } from "./dispatcher-registry.js";
-import { normalizeReplyPayload, type NormalizeReplySkipReason } from "./normalize-reply.js";
 import type { ResponsePrefixContext } from "./response-prefix-template.js";
 import type { TypingController } from "./typing.js";
+import { sleep } from "../../utils.js";
+import { registerDispatcher } from "./dispatcher-registry.js";
+import { normalizeReplyPayload, type NormalizeReplySkipReason } from "./normalize-reply.js";
 
 export type ReplyDispatchKind = "tool" | "block" | "final";
 
@@ -69,6 +69,8 @@ type ReplyDispatcherWithTypingResult = {
   dispatcher: ReplyDispatcher;
   replyOptions: Pick<GetReplyOptions, "onReplyStart" | "onTypingController" | "onTypingCleanup">;
   markDispatchIdle: () => void;
+  /** Signal that the model run is complete so the typing controller can stop. */
+  markRunComplete: () => void;
 };
 
 export type ReplyDispatcher = {
@@ -236,6 +238,9 @@ export function createReplyDispatcherWithTyping(
     markDispatchIdle: () => {
       typingController?.markDispatchIdle();
       resolvedOnIdle?.();
+    },
+    markRunComplete: () => {
+      typingController?.markRunComplete();
     },
   };
 }

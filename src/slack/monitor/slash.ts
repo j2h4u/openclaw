@@ -1,16 +1,16 @@
 import type { SlackActionMiddlewareArgs, SlackCommandMiddlewareArgs } from "@slack/bolt";
 import type { ChatCommandDefinition, CommandArgs } from "../../auto-reply/commands-registry.js";
 import type { ReplyPayload } from "../../auto-reply/types.js";
+import type { ResolvedSlackAccount } from "../accounts.js";
+import type { SlackMonitorContext } from "./context.js";
 import { resolveCommandAuthorizedFromAuthorizers } from "../../channels/command-gating.js";
 import { resolveNativeCommandsEnabled, resolveNativeSkillsEnabled } from "../../config/commands.js";
 import { danger, logVerbose } from "../../globals.js";
 import { chunkItems } from "../../utils/chunk-items.js";
-import type { ResolvedSlackAccount } from "../accounts.js";
 import { resolveSlackAllowListMatch, resolveSlackUserAllowed } from "./allow-list.js";
 import { resolveSlackEffectiveAllowFrom } from "./auth.js";
 import { resolveSlackChannelConfig, type SlackChannelConfigResolved } from "./channel-config.js";
 import { buildSlackSlashCommandMatcher, resolveSlackSlashCommandConfig } from "./commands.js";
-import type { SlackMonitorContext } from "./context.js";
 import { normalizeSlackChannelType } from "./context.js";
 import { authorizeSlackDirectMessage } from "./dm-auth.js";
 import {
@@ -385,11 +385,11 @@ export async function registerSlackMonitorSlashCommands(params: {
           channelId: command.channel_id,
           channelName: channelInfo?.name,
           channels: ctx.channelsConfig,
+          channelKeys: ctx.channelsConfigKeys,
           defaultRequireMention: ctx.defaultRequireMention,
         });
         if (ctx.useAccessGroups) {
-          const channelAllowlistConfigured =
-            Boolean(ctx.channelsConfig) && Object.keys(ctx.channelsConfig ?? {}).length > 0;
+          const channelAllowlistConfigured = (ctx.channelsConfigKeys?.length ?? 0) > 0;
           const channelAllowed = channelConfig?.allowed !== false;
           if (
             !isSlackChannelAllowedByPolicy({
@@ -510,11 +510,11 @@ export async function registerSlackMonitorSlashCommands(params: {
       const [
         { resolveConversationLabel },
         { createReplyPrefixOptions },
-        { recordSessionMetaFromInbound, resolveStorePath },
+        { recordInboundSessionMetaSafe },
       ] = await Promise.all([
         import("../../channels/conversation-label.js"),
         import("../../channels/reply-prefix.js"),
-        import("../../config/sessions.js"),
+        import("../../channels/session-meta.js"),
       ]);
 
       const route = resolveAgentRoute({
@@ -578,18 +578,14 @@ export async function registerSlackMonitorSlashCommands(params: {
         OriginatingTo: `user:${command.user_id}`,
       });
 
-      const storePath = resolveStorePath(cfg.session?.store, {
+      await recordInboundSessionMetaSafe({
+        cfg,
         agentId: route.agentId,
+        sessionKey: ctxPayload.SessionKey ?? route.sessionKey,
+        ctx: ctxPayload,
+        onError: (err) =>
+          runtime.error?.(danger(`slack slash: failed updating session meta: ${String(err)}`)),
       });
-      try {
-        await recordSessionMetaFromInbound({
-          storePath,
-          sessionKey: ctxPayload.SessionKey ?? route.sessionKey,
-          ctx: ctxPayload,
-        });
-      } catch (err) {
-        runtime.error?.(danger(`slack slash: failed updating session meta: ${String(err)}`));
-      }
 
       const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
         cfg,

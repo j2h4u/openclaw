@@ -1,13 +1,13 @@
 import type { Client } from "@buape/carbon";
 import type { GatewayPlugin } from "@buape/carbon/gateway";
+import type { RuntimeEnv } from "../../runtime.js";
+import type { DiscordVoiceManager } from "../voice/manager.js";
+import type { DiscordMonitorStatusSink } from "./status.js";
 import { createArmableStallWatchdog } from "../../channels/transport/stall-watchdog.js";
 import { danger } from "../../globals.js";
-import type { RuntimeEnv } from "../../runtime.js";
 import { attachDiscordGatewayLogging } from "../gateway-logging.js";
 import { getDiscordGatewayEmitter, waitForDiscordGatewayStop } from "../monitor.gateway.js";
-import type { DiscordVoiceManager } from "../voice/manager.js";
 import { registerGateway, unregisterGateway } from "./gateway-registry.js";
-import type { DiscordMonitorStatusSink } from "./status.js";
 
 type ExecApprovalsHandler = {
   start: () => Promise<void>;
@@ -243,6 +243,22 @@ export async function runDiscordGatewayLifecycle(params: {
     }, HELLO_TIMEOUT_MS);
   };
   gatewayEmitter?.on("debug", onGatewayDebug);
+
+  // If the gateway is already connected when the lifecycle starts (the
+  // "WebSocket connection opened" debug event was emitted before we
+  // registered the listener above), push the initial connected status now.
+  // Guard against lifecycleStopping: if the abortSignal was already aborted,
+  // onAbort() ran synchronously above and pushed connected: false — don't
+  // contradict it with a spurious connected: true.
+  if (gateway?.isConnected && !lifecycleStopping) {
+    const at = Date.now();
+    pushStatus({
+      connected: true,
+      lastEventAt: at,
+      lastConnectedAt: at,
+      lastDisconnect: null,
+    });
+  }
 
   let sawDisallowedIntents = false;
   const logGatewayError = (err: unknown) => {

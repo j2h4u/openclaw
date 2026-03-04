@@ -1,7 +1,7 @@
-import { normalizeChatType } from "../channels/chat-type.js";
-import { createAccountListHelpers } from "../channels/plugins/account-helpers.js";
 import type { OpenClawConfig } from "../config/config.js";
 import type { SlackAccountConfig } from "../config/types.js";
+import { normalizeChatType } from "../channels/chat-type.js";
+import { createAccountListHelpers } from "../channels/plugins/account-helpers.js";
 import { resolveAccountEntry } from "../routing/account-lookup.js";
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../routing/session-key.js";
 import { resolveSlackAppToken, resolveSlackBotToken, resolveSlackUserToken } from "./token.js";
@@ -64,9 +64,18 @@ export function resolveSlackAccount(params: {
   const envBot = allowEnv ? resolveSlackBotToken(process.env.SLACK_BOT_TOKEN) : undefined;
   const envApp = allowEnv ? resolveSlackAppToken(process.env.SLACK_APP_TOKEN) : undefined;
   const envUser = allowEnv ? resolveSlackUserToken(process.env.SLACK_USER_TOKEN) : undefined;
-  const configBot = resolveSlackBotToken(merged.botToken);
-  const configApp = resolveSlackAppToken(merged.appToken);
-  const configUser = resolveSlackUserToken(merged.userToken);
+  const configBot = resolveSlackBotToken(
+    merged.botToken,
+    `channels.slack.accounts.${accountId}.botToken`,
+  );
+  const configApp = resolveSlackAppToken(
+    merged.appToken,
+    `channels.slack.accounts.${accountId}.appToken`,
+  );
+  const configUser = resolveSlackUserToken(
+    merged.userToken,
+    `channels.slack.accounts.${accountId}.userToken`,
+  );
   const botToken = configBot ?? envBot;
   const appToken = configApp ?? envApp;
   const userToken = configUser ?? envUser;

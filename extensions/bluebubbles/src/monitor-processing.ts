@@ -15,6 +15,11 @@ import {
   stripMarkdown,
   type HistoryEntry,
 } from "openclaw/plugin-sdk";
+import type {
+  BlueBubblesCoreRuntime,
+  BlueBubblesRuntimeEnv,
+  WebhookTarget,
+} from "./monitor-shared.js";
 import { downloadBlueBubblesAttachment } from "./attachments.js";
 import { markBlueBubblesChatRead, sendBlueBubblesTyping } from "./chat.js";
 import { fetchBlueBubblesHistory } from "./history.js";
@@ -36,13 +41,9 @@ import {
   resolveBlueBubblesMessageId,
   resolveReplyContextFromCache,
 } from "./monitor-reply-cache.js";
-import type {
-  BlueBubblesCoreRuntime,
-  BlueBubblesRuntimeEnv,
-  WebhookTarget,
-} from "./monitor-shared.js";
 import { isBlueBubblesPrivateApiEnabled } from "./probe.js";
 import { normalizeBlueBubblesReactionInput, sendBlueBubblesReaction } from "./reactions.js";
+import { normalizeSecretInputString } from "./secret-input.js";
 import { resolveChatGuidForTarget, sendMessageBlueBubbles } from "./send.js";
 import { formatBlueBubblesChatTarget, isAllowedBlueBubblesSender } from "./targets.js";
 
@@ -731,8 +732,8 @@ export async function processMessage(
   // surfacing dropped content (allowlist/mention/command gating).
   cacheInboundMessage();
 
-  const baseUrl = account.config.serverUrl?.trim();
-  const password = account.config.password?.trim();
+  const baseUrl = normalizeSecretInputString(account.config.serverUrl);
+  const password = normalizeSecretInputString(account.config.password);
   const maxBytes =
     account.config.mediaMaxMb && account.config.mediaMaxMb > 0
       ? account.config.mediaMaxMb * 1024 * 1024

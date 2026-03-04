@@ -1,9 +1,9 @@
+import type { OpenClawConfig } from "../../config/config.js";
 import { lookupContextTokens } from "../../agents/context.js";
 import { resolveCronStyleNow } from "../../agents/current-time.js";
 import { DEFAULT_CONTEXT_TOKENS } from "../../agents/defaults.js";
 import { DEFAULT_PI_COMPACTION_RESERVE_TOKENS_FLOOR } from "../../agents/pi-settings.js";
 import { parseNonNegativeByteSize } from "../../config/byte-size.js";
-import type { OpenClawConfig } from "../../config/config.js";
 import { resolveFreshSessionTotalTokens, type SessionEntry } from "../../config/sessions.js";
 import { SILENT_REPLY_TOKEN } from "../tokens.js";
 
@@ -161,11 +161,22 @@ export function shouldRunMemoryFlush(params: {
     return false;
   }
 
-  const compactionCount = params.entry.compactionCount ?? 0;
-  const lastFlushAt = params.entry.memoryFlushCompactionCount;
-  if (typeof lastFlushAt === "number" && lastFlushAt === compactionCount) {
+  if (hasAlreadyFlushedForCurrentCompaction(params.entry)) {
     return false;
   }
 
   return true;
+}
+
+/**
+ * Returns true when a memory flush has already been performed for the current
+ * compaction cycle. This prevents repeated flush runs within the same cycle —
+ * important for both the token-based and transcript-size–based trigger paths.
+ */
+export function hasAlreadyFlushedForCurrentCompaction(
+  entry: Pick<SessionEntry, "compactionCount" | "memoryFlushCompactionCount">,
+): boolean {
+  const compactionCount = entry.compactionCount ?? 0;
+  const lastFlushAt = entry.memoryFlushCompactionCount;
+  return typeof lastFlushAt === "number" && lastFlushAt === compactionCount;
 }

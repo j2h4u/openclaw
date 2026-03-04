@@ -2,8 +2,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { DEFAULT_PI_COMPACTION_RESERVE_TOKENS_FLOOR } from "../../agents/pi-settings.js";
 import type { SessionEntry } from "../../config/sessions.js";
+import { DEFAULT_PI_COMPACTION_RESERVE_TOKENS_FLOOR } from "../../agents/pi-settings.js";
 import {
   appendHistoryEntry,
   buildHistoryContext,
@@ -17,6 +17,7 @@ import {
 import {
   DEFAULT_MEMORY_FLUSH_FORCE_TRANSCRIPT_BYTES,
   DEFAULT_MEMORY_FLUSH_SOFT_TOKENS,
+  hasAlreadyFlushedForCurrentCompaction,
   resolveMemoryFlushContextWindowTokens,
   resolveMemoryFlushSettings,
   shouldRunMemoryFlush,
@@ -347,6 +348,42 @@ describe("shouldRunMemoryFlush", () => {
         softThresholdTokens: 2_000,
       }),
     ).toBe(false);
+  });
+});
+
+describe("hasAlreadyFlushedForCurrentCompaction", () => {
+  it("returns true when memoryFlushCompactionCount matches compactionCount", () => {
+    expect(
+      hasAlreadyFlushedForCurrentCompaction({
+        compactionCount: 3,
+        memoryFlushCompactionCount: 3,
+      }),
+    ).toBe(true);
+  });
+
+  it("returns false when memoryFlushCompactionCount differs", () => {
+    expect(
+      hasAlreadyFlushedForCurrentCompaction({
+        compactionCount: 3,
+        memoryFlushCompactionCount: 2,
+      }),
+    ).toBe(false);
+  });
+
+  it("returns false when memoryFlushCompactionCount is undefined", () => {
+    expect(
+      hasAlreadyFlushedForCurrentCompaction({
+        compactionCount: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it("treats missing compactionCount as 0", () => {
+    expect(
+      hasAlreadyFlushedForCurrentCompaction({
+        memoryFlushCompactionCount: 0,
+      }),
+    ).toBe(true);
   });
 });
 
